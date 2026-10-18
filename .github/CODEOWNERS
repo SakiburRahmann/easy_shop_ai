@@ -1,0 +1,8 @@
+# Default owner: repository config, CI and shared contracts.
+* @SakiburRahmann
+
+# Add per-area owners as the team roles are confirmed, for example:
+# apps/web        @<web-frontend-handle>
+# apps/mobile     @nowrin-stack
+# apps/api        @SakiburRahmann
+# packages/shared @SakiburRahmann

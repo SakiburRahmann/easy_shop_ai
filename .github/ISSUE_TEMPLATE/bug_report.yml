@@ -1,0 +1,44 @@
+name: Bug report
+description: Something is broken or behaves incorrectly
+title: '[Bug] '
+labels: ['bug']
+body:
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened?
+      description: Describe the bug and what you expected instead.
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. Go to ...
+        2. Click ...
+        3. See error
+    validations:
+      required: true
+
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      options:
+        - Web (storefront / dashboard)
+        - Mobile app
+        - API
+        - AI assistant
+        - CI / tooling
+    validations:
+      required: true
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs / screenshots
+      description: Paste errors or attach screenshots. Remove secrets first.
+    validations:
+      required: false
