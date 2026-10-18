@@ -1,0 +1,24 @@
+{
+  "name": "easy-shop-ai",
+  "version": "0.0.0",
+  "private": true,
+  "description": "EasyShopAI - AI storefront and sales assistant for online sellers (CSE 327 project)",
+  "packageManager": "pnpm@12.14.0",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "dev": "turbo run dev",
+    "build": "turbo run build",
+    "lint": "turbo run lint",
+    "typecheck": "turbo run typecheck",
+    "test": "turbo run test",
+    "ci": "turbo run lint typecheck test build",
+    "format": "prettier --write .",
+    "format:check": "prettier --check ."
+  },
+  "devDependencies": {
+    "prettier": "^3.9.10",
+    "turbo": "^2.11.9"
+  }
+}

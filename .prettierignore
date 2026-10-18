@@ -1,0 +1,11 @@
+pnpm-lock.yaml
+node_modules
+dist
+.next
+.expo
+.turbo
+coverage
+*.tsbuildinfo
+docs/proposals/
+apps/web/next-env.d.ts
+apps/api/worker-configuration.d.ts
