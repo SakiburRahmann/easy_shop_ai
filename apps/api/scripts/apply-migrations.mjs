@@ -25,7 +25,10 @@ function readEnvFile(path) {
     const eq = trimmed.indexOf('=');
     if (eq <= 0) continue;
     const key = trimmed.slice(0, eq).trim();
-    const value = trimmed.slice(eq + 1).trim().replace(/^["'](.*)["']$/, '$1');
+    const value = trimmed
+      .slice(eq + 1)
+      .trim()
+      .replace(/^["'](.*)["']$/, '$1');
     if (!(key in out)) out[key] = value;
   }
   return out;
@@ -48,11 +51,14 @@ function parseUrl(raw) {
 }
 
 const candidates = [];
-if (env.SUPABASE_SESSION_POOLER_URL) candidates.push(['session pooler', parseUrl(env.SUPABASE_SESSION_POOLER_URL)]);
+if (env.SUPABASE_SESSION_POOLER_URL)
+  candidates.push(['session pooler', parseUrl(env.SUPABASE_SESSION_POOLER_URL)]);
 if (env.DATABASE_URL) candidates.push(['direct connection', parseUrl(env.DATABASE_URL)]);
 
 if (candidates.length === 0) {
-  console.error('No database URL found in .env.local (need SUPABASE_SESSION_POOLER_URL or DATABASE_URL)');
+  console.error(
+    'No database URL found in .env.local (need SUPABASE_SESSION_POOLER_URL or DATABASE_URL)',
+  );
   process.exit(1);
 }
 

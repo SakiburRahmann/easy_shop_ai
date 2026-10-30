@@ -25,7 +25,11 @@ const uuidSchema = z.uuid();
 const isoDateTimeSchema = z.iso.datetime();
 /** Money amounts in BDT (৳). Numbers over the wire. */
 const moneySchema = z.number().min(0).max(10_000_000);
-const phoneSchema = z.string().min(6).max(20).regex(/^[0-9+\-\s()]+$/, 'digits, spaces, +, - only');
+const phoneSchema = z
+  .string()
+  .min(6)
+  .max(20)
+  .regex(/^[0-9+\-\s()]+$/, 'digits, spaces, +, - only');
 
 /* -------------------------------------------------------------------------- */
 /* Shop                                                                       */
@@ -214,7 +218,13 @@ export type ProductQuery = z.infer<typeof productQuerySchema>;
 /* Orders                                                                     */
 /* -------------------------------------------------------------------------- */
 
-export const orderStatusSchema = z.enum(['pending', 'confirmed', 'shipped', 'delivered', 'cancelled']);
+export const orderStatusSchema = z.enum([
+  'pending',
+  'confirmed',
+  'shipped',
+  'delivered',
+  'cancelled',
+]);
 export type OrderStatus = z.infer<typeof orderStatusSchema>;
 export const orderSourceSchema = z.enum(['ai', 'storefront']);
 export type OrderSource = z.infer<typeof orderSourceSchema>;
@@ -302,7 +312,11 @@ export type DiscountVerdict = z.infer<typeof discountVerdictSchema>;
 /* -------------------------------------------------------------------------- */
 
 export const uploadInputSchema = z.object({
-  filename: z.string().min(1).max(120).regex(/^[^/\\]+$/, 'plain filename, no path parts'),
+  filename: z
+    .string()
+    .min(1)
+    .max(120)
+    .regex(/^[^/\\]+$/, 'plain filename, no path parts'),
   contentType: z.enum(['image/jpeg', 'image/png', 'image/webp', 'image/gif']),
   /** base64-encoded file bytes, max ~4.5 MB encoded. */
   dataBase64: z.string().max(6_400_000),
@@ -321,7 +335,10 @@ export const signUpInputSchema = z.object({
 });
 export type SignUpInput = z.infer<typeof signUpInputSchema>;
 
-export const signInInputSchema = z.object({ email: z.email().max(120), password: z.string().min(8).max(72) });
+export const signInInputSchema = z.object({
+  email: z.email().max(120),
+  password: z.string().min(8).max(72),
+});
 export type SignInInput = z.infer<typeof signInInputSchema>;
 
 export const authUserSchema = z.object({ id: uuidSchema, email: z.email().max(120) });
@@ -387,7 +404,11 @@ export const chatEventSchema = z.discriminatedUnion('type', [
   z.object({ type: z.literal('start'), conversationId: uuidSchema }),
   z.object({ type: z.literal('token'), text: z.string() }),
   z.object({ type: z.literal('cards'), cards: z.array(chatProductCardSchema).max(6) }),
-  z.object({ type: z.literal('tool'), name: z.string().max(40), status: z.enum(['running', 'done']) }),
+  z.object({
+    type: z.literal('tool'),
+    name: z.string().max(40),
+    status: z.enum(['running', 'done']),
+  }),
   z.object({ type: z.literal('done'), messageId: uuidSchema.nullish() }),
   z.object({ type: z.literal('error'), message: z.string().max(300) }),
 ]);
@@ -406,6 +427,7 @@ export const conversationSchema = z.object({
   visitorId: z.string().min(8).max(64),
   status: conversationStatusSchema,
   messageCount: z.number().int().min(0),
+  lastMessage: z.string().max(8000).nullish(),
   lastMessageAt: isoDateTimeSchema,
   createdAt: isoDateTimeSchema,
 });

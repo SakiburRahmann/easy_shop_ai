@@ -21,6 +21,8 @@ expo-env.d.ts
 # Environment files (never commit; keep .env.example)
 .env
 .env.*
+.dev.vars
+.dev.vars.*
 !.env.example
 
 # Test / coverage
