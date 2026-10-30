@@ -28,5 +28,5 @@ export interface EnvShape {
 }
 
 export function geminiModel(env: ApiBindings): string {
-  return env.GEMINI_MODEL || 'gemini-2.5-flash';
+  return env.GEMINI_MODEL || 'gemini-3.5-flash';
 }

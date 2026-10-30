@@ -3,7 +3,7 @@
  * `create_order` tool. Totals are ALWAYS computed from database prices —
  * client-supplied prices/totals are never trusted (AGENTS.md rules #2, #4, #5).
  */
-import type { CreateOrderInput, OrderView, Product, Shop, Variant } from '@easyshop/shared';
+import { CreateOrderInput, OrderView, Product, Shop, Variant } from '@easyshop/shared';
 import type { Db } from './db';
 import { toOrderItemView, toOrderView, toProduct, toVariant } from './serialize';
 
@@ -14,13 +14,15 @@ export interface CreateOrderParams {
   customer: CreateOrderInput['customer'];
   note?: string;
   source: 'ai' | 'storefront';
+  /** Server-verified negotiated unit prices (conversation-scoped). */
+  negotiated?: Record<string, number>;
 }
 
 export type CreateOrderResult =
   { ok: true; order: OrderView } | { ok: false; status: number; error: string };
 
 export async function createOrderForShop(params: CreateOrderParams): Promise<CreateOrderResult> {
-  const { db, shop, items, customer, note, source } = params;
+  const { db, shop, items, customer, note, source, negotiated } = params;
 
   const productIds = [...new Set(items.map((i) => i.productId))];
   if (productIds.length !== items.length)
@@ -67,7 +69,8 @@ export async function createOrderForShop(params: CreateOrderParams): Promise<Cre
         error: `Only ${variant.stock} left in stock for ${entry.product.name}`,
       };
     }
-    const unitPrice = variant?.priceOverride ?? entry.product.price;
+    const negotiatedPrice = negotiated?.[item.productId];
+    const unitPrice = negotiatedPrice ?? variant?.priceOverride ?? entry.product.price;
     subtotal += unitPrice * item.qty;
     resolved.push({ item, unitPrice, product: entry.product, variant });
   }

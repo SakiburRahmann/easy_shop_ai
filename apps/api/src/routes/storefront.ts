@@ -26,10 +26,7 @@ storefrontRoutes.get('/s/:slug', async (c) => {
     .select('*')
     .eq('slug', slug)
     .maybeSingle();
-  if (shopError || !shopRow) {
-    void notFound(c, 'Shop');
-    return;
-  }
+  if (shopError || !shopRow) return notFound(c, 'Shop');
   const shop = toShop(shopRow);
 
   const [
@@ -99,10 +96,7 @@ storefrontRoutes.get('/s/:slug/products', async (c) => {
     .select('id')
     .eq('slug', slug)
     .maybeSingle();
-  if (shopError || !shopRow) {
-    void notFound(c, 'Shop');
-    return;
-  }
+  if (shopError || !shopRow) return notFound(c, 'Shop');
   const shopId = str((shopRow as Record<string, unknown>).id);
 
   const sp = new URL(c.req.url).searchParams;
@@ -152,16 +146,10 @@ storefrontRoutes.get('/products/:productId', async (c) => {
     .eq('id', param(c, 'productId'))
     .eq('active', true)
     .maybeSingle();
-  if (error || !data) {
-    void notFound(c, 'Product');
-    return;
-  }
+  if (error || !data) return notFound(c, 'Product');
   const r = data as Record<string, unknown>;
   const shop = r.shops as Record<string, unknown> | null;
-  if (!shop) {
-    void notFound(c, 'Product');
-    return;
-  }
+  if (!shop) return notFound(c, 'Product');
   const product = productPublicSchema.parse(
     toProductPublic(data, Array.isArray(r.variants) ? r.variants : []),
   );

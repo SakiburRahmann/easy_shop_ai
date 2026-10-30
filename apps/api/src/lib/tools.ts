@@ -32,7 +32,9 @@ export const toolDeclarations: GeminiToolDeclaration[] = [
       properties: {
         query: stringProp('Free text to match product name or description'),
         category: stringProp('Category name hint, e.g. t-shirt, saree'),
-        color: stringProp('Color the customer asked for'),
+        color: stringProp(
+          "Color the customer asked for (pass it as spoken — 'red', 'lal' or 'লাল' are all fine)",
+        ),
         size: stringProp('Size the customer asked for'),
         max_price: numberProp('Maximum price per unit the customer will consider'),
       },
@@ -111,6 +113,90 @@ export const toolDeclarations: GeminiToolDeclaration[] = [
   },
 ];
 
+/** Banglish/Bangla → English keyword synonyms for search matching. */
+const SYNONYMS: Record<string, string> = {
+  lal: 'red',
+  red: 'red',
+  kalo: 'black',
+  kala: 'black',
+  black: 'black',
+  sadha: 'white',
+  safa: 'white',
+  white: 'white',
+  neel: 'blue',
+  blue: 'blue',
+  sobuj: 'green',
+  green: 'green',
+  holud: 'yellow',
+  yellow: 'yellow',
+  gulabi: 'pink',
+  pink: 'pink',
+  sab: 'teal',
+  teal: 'teal',
+  tshirt: 't-shirt',
+  't-shirt': 't-shirt',
+  shirt: 'shirt',
+  tee: 't-shirt',
+  sharee: 'saree',
+  saree: 'saree',
+  shari: 'saree',
+  panjabi: 'panjabi',
+  punjabi: 'panjabi',
+  kids: 'kids',
+  denim: 'denim',
+};
+
+/** Bangla (script) words the model may pass as args — mapped to their English keyword. */
+const BANGLA_KEYWORDS: Record<string, string> = {
+  লাল: 'red',
+  কালো: 'black',
+  কালা: 'black',
+  সাদা: 'white',
+  নীল: 'blue',
+  নেভি: 'navy',
+  সবুজ: 'green',
+  হলুদ: 'yellow',
+  গোলাপি: 'pink',
+  ছাই: 'grey',
+  ধূসর: 'grey',
+  গ্রে: 'grey',
+  শাড়ি: 'saree',
+  টিশার্ট: 't-shirt',
+  পাঞ্জাবি: 'panjabi',
+};
+
+/** Translates a free-form color/type phrase (any language) to canonical EN tokens. */
+function canonicalPhrase(s: string): string {
+  const norm = s.toLowerCase();
+  const words = norm.split(/[^a-z0-9\u0980-\u09ff]+/).filter(Boolean);
+  const mapped = words.map(
+    (w) => SYNONYMS[w.replace(/-/g, '')] ?? SYNONYMS[w] ?? BANGLA_KEYWORDS[w] ?? w,
+  );
+  return mapped.join(' ').trim();
+}
+
+const STOPWORDS = new Set([
+  'yes', 'no', 'ok', 'okay', 'please', 'confirm', 'confirmed', 'order', 'kore', 'din', 'dorkar',
+  'lagbe', 'chai', 'nibo', 'nite', 'ekta', 'one', 'two', '1pc', 'pcs', 'piece', 'pc', 'pieces',
+  'size', 'the', 'and', 'for', 'want', 'need', 'buy', 'hobe', 'ache', 'kori', 'korte', 'ami',
+  'price', 'dam', 'taka', 'takar', 'moddhe', 'er', 'nam', 'address',
+]);
+
+/** Splits a free-text query into meaningful, synonym-normalized tokens. */
+function textTokens(q: string | undefined): string[] {
+  if (!q) return [];
+  const raw = q.toLowerCase().split(/[^a-z0-9\u0980-\u09ff-]+/).filter(Boolean);
+  const tokens: string[] = [];
+  for (const t of raw) {
+    if (t.length < 3 || STOPWORDS.has(t)) continue;
+    const normalized = SYNONYMS[t.replace(/-/g, '')] ?? SYNONYMS[t] ?? t.replace(/-/g, '');
+    tokens.push(normalized);
+    const synonym = SYNONYMS[t.replace(/-/g, '')];
+    if (synonym && synonym !== normalized) tokens.push(synonym);
+  }
+  return [...new Set(tokens)];
+}
+
 function cleanQuery(q: unknown): string | undefined {
   if (typeof q !== 'string') return undefined;
   const cleaned = q
@@ -157,31 +243,16 @@ interface ProductRow extends Record<string, unknown> {
 }
 
 async function searchProducts(ctx: AiToolContext, args: Record<string, unknown>) {
-  const nameQuery = cleanQuery(args.query);
-  let query = ctx.db
+  // Fetch the shop's active products once and filter in JS — resilient to
+  // how the model phrases free-text queries in Bangla/Banglish/English.
+  const { data, error } = await ctx.db
     .from('products')
     .select(MODEL_FIELDS)
     .eq('shop_id', ctx.shop.id)
     .eq('active', true)
-    .limit(30);
-  if (args.max_price != null) query = query.lte('price', num(args.max_price));
-  if (nameQuery) query = query.ilike('name', `%${nameQuery}%`);
-
-  let { data, error } = await query;
+    .order('created_at', { ascending: false })
+    .limit(100);
   if (error) return { error: `Search failed: ${error.message}` };
-
-  if ((!data || data.length === 0) && nameQuery) {
-    const res = await ctx.db
-      .from('products')
-      .select(MODEL_FIELDS)
-      .eq('shop_id', ctx.shop.id)
-      .eq('active', true)
-      .ilike('description', `%${nameQuery}%`)
-      .limit(30);
-    ({ data, error } = res);
-    if (error) return { error: `Search failed: ${error.message}` };
-  }
-
   const rows: ProductRow[] = data ?? [];
 
   // Category hints resolve against this shop's categories only.
@@ -199,42 +270,73 @@ async function searchProducts(ctx: AiToolContext, args: Record<string, unknown>)
     if (categoryIds.length === 0) return { products: [], note: 'No such category in this shop' };
   }
 
-  const color = cleanQuery(args.color)?.toLowerCase();
-  const size = cleanQuery(args.size)?.toLowerCase();
+  const color = cleanQuery(args.color) ?? '';
+  const size = cleanQuery(args.size) ?? '';
   const maxPrice = args.max_price != null ? num(args.max_price) : undefined;
+  const tokens = textTokens(cleanQuery(args.query));
+  const colorNorm = color ? canonicalPhrase(color) : '';
+  const sizeNorm = size.toLowerCase();
 
-  const matched = rows
-    .filter((r) => (categoryIds ? categoryIds.includes(String(r.category_id)) : true))
-    .filter((r) => {
-      const variants = Array.isArray(r.variants) ? r.variants : [];
-      if (
-        color &&
-        !variants.some((v) =>
-          String((v as Record<string, unknown>).color ?? '')
-            .toLowerCase()
-            .includes(color),
-        )
-      )
-        return false;
-      if (
-        size &&
-        !variants.some((v) =>
-          String((v as Record<string, unknown>).size ?? '')
-            .toLowerCase()
-            .includes(size),
-        )
-      )
-        return false;
-      if (maxPrice != null) {
-        const overrides = variants
-          .map((v) => num((v as Record<string, unknown>).price_override))
-          .filter((n) => n > 0);
-        const minPrice = Math.min(num(r.price), ...(overrides.length ? overrides : [Infinity]));
-        if (minPrice > maxPrice) return false;
+  const textMatch = (r: ProductRow): boolean => {
+    const haystack = `${String(r.name)} ${String(r.description ?? '')}`.toLowerCase();
+    return tokens.some((t) => haystack.includes(t));
+  };
+
+  const attributeMatches = (r: ProductRow): boolean => {
+    const variants = Array.isArray(r.variants) ? r.variants : [];
+    if (categoryIds ? !categoryIds.includes(String(r.category_id)) : false) return false;
+    if (colorNorm || sizeNorm) {
+      return variants.some((v) => {
+        const vr = v as Record<string, unknown>;
+        if (colorNorm) {
+          // Translate both sides ('লাল'/'red/lal' → 'red') so color language never breaks the match.
+          const vColor = canonicalPhrase(String(vr.color ?? ''));
+          if (!(vColor.includes(colorNorm) || colorNorm.includes(vColor))) return false;
+        }
+        if (sizeNorm) {
+          const vSize = String(vr.size ?? '').toLowerCase().trim();
+          if (vSize && !(vSize.includes(sizeNorm) || sizeNorm.includes(vSize))) return false;
+        }
+        return true;
+      });
+    }
+    if (maxPrice != null) {
+      const overrides = variants
+        .map((v) => num((v as Record<string, unknown>).price_override))
+        .filter((n) => n > 0);
+      const minPrice = Math.min(num(r.price), ...(overrides.length ? overrides : [Infinity]));
+      if (minPrice > maxPrice) return false;
+    }
+    return true;
+  };
+
+  // Resilient matching: attributes first, then text; if the exact combination
+  // has no match, degrade gracefully so the model always sees real data.
+  let matched: ProductRow[] = [];
+  let note = '';
+  const attrMatches = rows.filter(attributeMatches);
+  if (attrMatches.length) {
+    if (tokens.length) {
+      const textMatches = attrMatches.filter(textMatch);
+      matched = textMatches.length ? textMatches : attrMatches;
+      if (!textMatches.length) {
+        note =
+          'Products matched by color/size/price but not by name keyword — verify they still fit the request.';
       }
-      return true;
-    })
-    .slice(0, 6);
+    } else {
+      matched = attrMatches;
+    }
+  } else if (tokens.length) {
+    matched = rows.filter(textMatch);
+    if (matched.length) {
+      note =
+        'No exact color/size match for the request; these match the item by name — check the per-variant stock and colors above before answering.';
+    }
+  } else {
+    matched = rows.slice(0, 6);
+    note = 'No search filters provided; showing the newest products.';
+  }
+  matched = matched.slice(0, 6);
 
   const publicProducts = matched.map((r) => toProductPublic(r, r.variants ?? []));
   if (publicProducts.length) ctx.onCards(publicProducts.map(cardFromProduct));
@@ -248,9 +350,16 @@ async function searchProducts(ctx: AiToolContext, args: Record<string, unknown>)
       description_short: (p.description ?? '').slice(0, 160),
       category_id: p.categoryId ?? null,
       image: p.images[0] ?? null,
+      variants: p.variants.map((v) => ({
+        id: v.id,
+        size: v.size ?? null,
+        color: v.color ?? null,
+        stock: v.stock,
+        price: v.priceOverride ?? p.price,
+      })),
     })),
     note: publicProducts.length
-      ? null
+      ? note || 'Availability/size answers must come from the variants list above, never from guesses.'
       : 'No products matched. Tell the customer honestly and suggest searching another keyword.',
   };
 }
@@ -320,9 +429,12 @@ async function checkDiscount(
     },
     offered,
   );
-  if (verdict.decision === 'accept')
+  if (verdict.decision === 'accept') {
+    await rememberNegotiated(ctx, String(row.id), verdict.unitPrice);
     return { decision: 'accept', unit_price: verdict.unitPrice, message: verdict.message };
+  }
   if (verdict.decision === 'counter') {
+    await rememberNegotiated(ctx, String(row.id), verdict.unitPrice);
     return {
       decision: 'counter',
       unit_price: verdict.unitPrice,
@@ -330,7 +442,43 @@ async function checkDiscount(
       message: verdict.message,
     };
   }
+  // reject: drop any previously stored negotiated price for this product
+  await ctx.db
+    .from('negotiated_prices')
+    .delete()
+    .eq('conversation_id', ctx.conversationId)
+    .eq('product_id', String(row.id));
   return { decision: 'reject', message: verdict.message };
+}
+
+/** Stores the server-verified price the customer may buy at within this conversation. */
+async function rememberNegotiated(ctx: AiToolContext, productId: string, unitPrice: number) {
+  const { error } = await ctx.db.from('negotiated_prices').upsert(
+    {
+      conversation_id: ctx.conversationId,
+      product_id: productId,
+      unit_price: unitPrice.toFixed(2),
+      updated_at: new Date().toISOString(),
+    },
+    { onConflict: 'conversation_id,product_id' },
+  );
+  if (error) console.error('Failed to store negotiated price:', error.message);
+}
+
+/** Conversation-scoped negotiated prices for the given product ids. */
+async function loadNegotiated(ctx: AiToolContext, productIds: string[]): Promise<Record<string, number>> {
+  if (!productIds.length) return {};
+  const { data, error } = await ctx.db
+    .from('negotiated_prices')
+    .select('product_id, unit_price')
+    .eq('conversation_id', ctx.conversationId)
+    .in('product_id', productIds);
+  if (error || !data) return {};
+  const map: Record<string, number> = {};
+  for (const row of data as Array<Record<string, unknown>>) {
+    map[String(row.product_id)] = num(row.unit_price);
+  }
+  return map;
 }
 
 async function createOrder(ctx: AiToolContext, args: Record<string, unknown>) {
@@ -362,12 +510,16 @@ async function createOrder(ctx: AiToolContext, args: Record<string, unknown>) {
   if (!name || !phone || address.length < 5)
     return { error: 'Customer name, valid phone and address are required' };
 
+  // Server-verified negotiated prices for this conversation (bargaining result).
+  const negotiated = await loadNegotiated(ctx, items.map((i) => i.productId));
+
   const result = await createOrderForShop({
     db: ctx.db,
     shop: ctx.shop,
     items,
     customer: { name, phone, address },
     source: 'ai',
+    negotiated,
   });
   if (!result.ok) return { error: result.error };
 

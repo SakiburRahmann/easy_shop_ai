@@ -44,7 +44,7 @@ function sellerListQuery(c: { req: { url: string } }): SellerProductListQuery {
 /** Seller product list (includes floor prices and variants). */
 catalogRoutes.get('/shops/:shopId/products', requireAuth, async (c) => {
   const shop = await ownedShop(c, param(c, 'shopId'));
-  if (!shop) return;
+  if (shop instanceof Response) return shop;
   const q = sellerListQuery(c);
   const db = c.get('db');
 
@@ -67,9 +67,8 @@ catalogRoutes.get('/shops/:shopId/products', requireAuth, async (c) => {
 
 catalogRoutes.post('/shops/:shopId/products', requireAuth, async (c) => {
   const shop = await ownedShop(c, param(c, 'shopId'));
-  if (!shop) return;
+  if (shop instanceof Response) return shop;
   const input = await parseBody(c, productInputSchema);
-  if (!input) return;
   const db = c.get('db');
 
   if (input.categoryId) {
@@ -126,26 +125,26 @@ catalogRoutes.post('/shops/:shopId/products', requireAuth, async (c) => {
   );
 });
 
-async function productAndShop(c: Parameters<typeof ownedShop>[0], productId: string) {
+async function productAndShop(
+  c: Parameters<typeof ownedShop>[0],
+  productId: string,
+): Promise<string | Response> {
   const db = c.get('db');
   const { data, error } = await db
     .from('products')
     .select('shop_id')
     .eq('id', productId)
     .maybeSingle();
-  if (error || !data) {
-    void notFound(c, 'Product');
-    return null;
-  }
+  if (error || !data) return notFound(c, 'Product');
   const shop = await ownedShop(c, str((data as Record<string, unknown>).shop_id));
-  return shop ? productId : null;
+  if (shop instanceof Response) return shop;
+  return productId;
 }
 
 catalogRoutes.patch('/products/:productId', requireAuth, async (c) => {
   const productId = await productAndShop(c, param(c, 'productId'));
-  if (!productId) return;
+  if (productId instanceof Response) return productId;
   const input = await parseBody(c, productUpdateInputSchema);
-  if (!input) return;
   const db = c.get('db');
 
   const patch: Record<string, unknown> = {};
@@ -194,7 +193,7 @@ catalogRoutes.patch('/products/:productId', requireAuth, async (c) => {
 
 catalogRoutes.delete('/products/:productId', requireAuth, async (c) => {
   const productId = await productAndShop(c, param(c, 'productId'));
-  if (!productId) return;
+  if (productId instanceof Response) return productId;
   const db = c.get('db');
   const { error } = await db.from('products').delete().eq('id', productId);
   if (error) return c.json({ error: error.message }, 500);
@@ -205,9 +204,8 @@ catalogRoutes.delete('/products/:productId', requireAuth, async (c) => {
 
 catalogRoutes.post('/products/:productId/variants', requireAuth, async (c) => {
   const productId = await productAndShop(c, param(c, 'productId'));
-  if (!productId) return;
+  if (productId instanceof Response) return productId;
   const input = await parseBody(c, variantInputSchema);
-  if (!input) return;
   const db = c.get('db');
   const { data, error } = await db
     .from('variants')
@@ -224,25 +222,21 @@ catalogRoutes.post('/products/:productId/variants', requireAuth, async (c) => {
   return c.json(variantSchema.parse(toVariant(data)), 201);
 });
 
-async function variantAndShop(c: Parameters<typeof ownedShop>[0]) {
+async function variantAndShop(c: Parameters<typeof ownedShop>[0]): Promise<string | Response> {
   const db = c.get('db');
   const { data, error } = await db
     .from('variants')
     .select('product_id')
     .eq('id', param(c, 'variantId'))
     .maybeSingle();
-  if (error || !data) {
-    void notFound(c, 'Variant');
-    return null;
-  }
+  if (error || !data) return notFound(c, 'Variant');
   return productAndShop(c, str((data as Record<string, unknown>).product_id));
 }
 
 catalogRoutes.patch('/variants/:variantId', requireAuth, async (c) => {
   const productId = await variantAndShop(c);
-  if (!productId) return;
+  if (productId instanceof Response) return productId;
   const input = await parseBody(c, variantInputSchema);
-  if (!input) return;
   const db = c.get('db');
   const patch: Record<string, unknown> = {};
   if (input.size !== undefined) patch.size = input.size ?? null;
@@ -263,7 +257,7 @@ catalogRoutes.patch('/variants/:variantId', requireAuth, async (c) => {
 
 catalogRoutes.delete('/variants/:variantId', requireAuth, async (c) => {
   const productId = await variantAndShop(c);
-  if (!productId) return;
+  if (productId instanceof Response) return productId;
   const db = c.get('db');
   const { error } = await db.from('variants').delete().eq('id', param(c, 'variantId'));
   if (error) return c.json({ error: error.message }, 500);
@@ -274,7 +268,6 @@ catalogRoutes.delete('/variants/:variantId', requireAuth, async (c) => {
 
 catalogRoutes.post('/uploads', requireAuth, async (c) => {
   const input = await parseBody(c, uploadInputSchema);
-  if (!input) return;
   const db = c.get('db');
   const shopId = await ownerShopIdOf(db, c.get('authUser').id);
   if (!shopId) return c.json({ error: 'Create your shop before uploading images' }, 400);

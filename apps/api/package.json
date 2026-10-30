@@ -10,6 +10,7 @@
     "cf-typegen": "wrangler types",
     "lint": "eslint .",
     "db:apply": "node scripts/apply-migrations.mjs",
+    "db:seed": "node scripts/seed.mjs",
     "typecheck": "wrangler types && tsc --noEmit",
     "test": "vitest run"
   },

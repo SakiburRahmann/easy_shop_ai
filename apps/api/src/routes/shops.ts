@@ -22,7 +22,6 @@ export const shopRoutes = new Hono<EnvShape>();
 
 shopRoutes.post('/shops', requireAuth, async (c) => {
   const input = await parseBody(c, shopCreateInputSchema);
-  if (!input) return;
   const db = c.get('db');
   const authUser = c.get('authUser');
 
@@ -64,15 +63,14 @@ shopRoutes.post('/shops', requireAuth, async (c) => {
 
 shopRoutes.get('/shops/:shopId', requireAuth, async (c) => {
   const shop = await ownedShop(c, param(c, 'shopId'));
-  if (!shop) return;
+  if (shop instanceof Response) return shop;
   return c.json(shopSchema.parse(shop));
 });
 
 shopRoutes.patch('/shops/:shopId', requireAuth, async (c) => {
   const shop = await ownedShop(c, param(c, 'shopId'));
-  if (!shop) return;
+  if (shop instanceof Response) return shop;
   const input = await parseBody(c, shopUpdateInputSchema);
-  if (!input) return;
   const db = c.get('db');
 
   const { data, error } = await db
@@ -97,9 +95,8 @@ shopRoutes.patch('/shops/:shopId', requireAuth, async (c) => {
 
 shopRoutes.post('/shops/:shopId/categories', requireAuth, async (c) => {
   const shop = await ownedShop(c, param(c, 'shopId'));
-  if (!shop) return;
+  if (shop instanceof Response) return shop;
   const input = await parseBody(c, categoryInputSchema);
-  if (!input) return;
   const db = c.get('db');
   const { data, error } = await db
     .from('categories')
@@ -110,28 +107,24 @@ shopRoutes.post('/shops/:shopId/categories', requireAuth, async (c) => {
   return c.json(categorySchema.parse(toCategory(data)), 201);
 });
 
-async function categoryAndShop(c: Parameters<typeof ownedShop>[0]): Promise<Category | null> {
+async function categoryAndShop(c: Parameters<typeof ownedShop>[0]): Promise<Category | Response> {
   const db = c.get('db');
   const { data, error } = await db
     .from('categories')
     .select('*')
     .eq('id', c.req.param('categoryId'))
     .maybeSingle();
-  if (error || !data) {
-    void notFound(c, 'Category');
-    return null;
-  }
+  if (error || !data) return notFound(c, 'Category');
   const category = toCategory(data);
   const shop = await ownedShop(c, category.shopId);
-  if (!shop) return null;
+  if (shop instanceof Response) return shop;
   return category;
 }
 
 shopRoutes.patch('/categories/:categoryId', requireAuth, async (c) => {
   const category = await categoryAndShop(c);
-  if (!category) return;
+  if (category instanceof Response) return category;
   const input = await parseBody(c, categoryInputSchema);
-  if (!input) return;
   const db = c.get('db');
   const { data, error } = await db
     .from('categories')
@@ -145,7 +138,7 @@ shopRoutes.patch('/categories/:categoryId', requireAuth, async (c) => {
 
 shopRoutes.delete('/categories/:categoryId', requireAuth, async (c) => {
   const category = await categoryAndShop(c);
-  if (!category) return;
+  if (category instanceof Response) return category;
   const db = c.get('db');
   const { error } = await db.from('categories').delete().eq('id', category.id);
   if (error) return c.json({ error: error.message }, 500);
@@ -188,7 +181,7 @@ async function ensureAiSettings(
 
 shopRoutes.get('/shops/:shopId/ai-settings', requireAuth, async (c) => {
   const shop = await ownedShop(c, param(c, 'shopId'));
-  if (!shop) return;
+  if (shop instanceof Response) return shop;
   const settings = await ensureAiSettings(c, shop.id);
   if (!settings) return c.json({ error: 'Failed to load settings' }, 500);
   return c.json(settings);
@@ -196,9 +189,8 @@ shopRoutes.get('/shops/:shopId/ai-settings', requireAuth, async (c) => {
 
 shopRoutes.patch('/shops/:shopId/ai-settings', requireAuth, async (c) => {
   const shop = await ownedShop(c, param(c, 'shopId'));
-  if (!shop) return;
+  if (shop instanceof Response) return shop;
   const input = await parseBody(c, aiSettingsUpdateInputSchema);
-  if (!input) return;
   const db = c.get('db');
   await db
     .from('ai_settings')
@@ -225,7 +217,7 @@ shopRoutes.patch('/shops/:shopId/ai-settings', requireAuth, async (c) => {
 
 shopRoutes.get('/shops/:shopId/conversations', requireAuth, async (c) => {
   const shop = await ownedShop(c, param(c, 'shopId'));
-  if (!shop) return;
+  if (shop instanceof Response) return shop;
   const db = c.get('db');
   const status = c.req.query('status');
 
@@ -269,27 +261,23 @@ shopRoutes.get('/shops/:shopId/conversations', requireAuth, async (c) => {
   return c.json(list);
 });
 
-async function conversationOwned(c: Parameters<typeof ownedShop>[0]): Promise<string | null> {
+async function conversationOwned(c: Parameters<typeof ownedShop>[0]): Promise<string | Response> {
   const db = c.get('db');
   const { data, error } = await db
     .from('conversations')
     .select('shop_id')
     .eq('id', param(c, 'conversationId'))
     .maybeSingle();
-  if (error || !data) {
-    void notFound(c, 'Conversation');
-    return null;
-  }
+  if (error || !data) return notFound(c, 'Conversation');
   const shop = await ownedShop(c, str((data as Record<string, unknown>).shop_id));
-  if (!shop) return null;
+  if (shop instanceof Response) return shop;
   return param(c, 'conversationId');
 }
 
 shopRoutes.patch('/conversations/:conversationId', requireAuth, async (c) => {
   const conversationId = await conversationOwned(c);
-  if (!conversationId) return;
+  if (conversationId instanceof Response) return conversationId;
   const input = await parseBody(c, conversationUpdateInputSchema);
-  if (!input) return;
   const db = c.get('db');
   const { error } = await db
     .from('conversations')
@@ -301,7 +289,7 @@ shopRoutes.patch('/conversations/:conversationId', requireAuth, async (c) => {
 
 shopRoutes.get('/conversations/:conversationId/messages', requireAuth, async (c) => {
   const conversationId = await conversationOwned(c);
-  if (!conversationId) return;
+  if (conversationId instanceof Response) return conversationId;
   const db = c.get('db');
   const { data, error } = await db
     .from('messages')

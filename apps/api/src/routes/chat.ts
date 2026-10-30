@@ -21,7 +21,6 @@ function sseChunk(event: ChatEvent): string {
 chatRoutes.post('/chat', async (c) => {
   const bindings = c.env as ApiBindings | undefined;
   const input = await parseBody(c, chatRequestSchema);
-  if (!input) return;
   const db = createDb(bindings ?? ({ SUPABASE_URL: '', SUPABASE_SECRET_KEY: '' } as ApiBindings));
 
   if (!bindings?.GEMINI_API_KEY) {
@@ -42,10 +41,7 @@ chatRoutes.post('/chat', async (c) => {
     .select('*')
     .eq('slug', input.shopSlug)
     .maybeSingle();
-  if (shopError || !shopRow) {
-    void notFound(c, 'Shop');
-    return;
-  }
+  if (shopError || !shopRow) return notFound(c, 'Shop');
   const shop = toShop(shopRow);
 
   const { data: aiRow } = await db
@@ -166,21 +162,16 @@ chatRoutes.post('/chat', async (c) => {
         }
 
         if (result.error && !result.text && result.toolCalls.length === 0) {
+          console.error('Gemini round failed:', result.error);
           await send({ type: 'error', message: 'AI service is temporarily unavailable' });
           break;
         }
 
         if (result.toolCalls.length === 0) break;
 
-        contents.push({
-          role: 'model',
-          parts: [
-            ...(result.text ? [{ text: result.text }] : []),
-            ...result.toolCalls.map((call) => ({
-              functionCall: { name: call.name, args: call.args },
-            })),
-          ],
-        });
+        // Replay the model's own parts (keeps thoughtSignature required by
+        // 3.x models when function calls are involved).
+        contents.push({ role: 'model', parts: result.parts });
 
         for (const call of result.toolCalls) {
           await send({ type: 'tool', name: call.name, status: 'running' });
@@ -204,6 +195,9 @@ chatRoutes.post('/chat', async (c) => {
 
           const outcome = await executeTool(toolContext, call.name, call.args);
           toolTrace.push({ name: call.name, args: call.args, decision: outcome });
+          if (outcome && typeof outcome === 'object' && 'error' in outcome) {
+            console.error(`[chat] tool ${call.name} failed:`, String(outcome.error).slice(0, 300));
+          }
           if (call.name === 'handoff_to_owner') flagged = true;
           await send({ type: 'tool', name: call.name, status: 'done' });
 
@@ -214,17 +208,23 @@ chatRoutes.post('/chat', async (c) => {
         }
       }
 
-      if (assistantText.trim()) {
-        const { data: inserted } = await db
+      // Persist the assistant turn whenever the model produced text OR called
+      // tools — the tool audit trail must survive text-less tool rounds.
+      if (assistantText.trim() || toolTrace.length) {
+        const { data: inserted, error: assistantError } = await db
           .from('messages')
           .insert({
             conversation_id: conversationId,
             role: 'assistant',
-            content: assistantText.slice(0, 8000),
+            // DB check requires non-empty content; tool-only rounds (model
+            // failed or returned no text) are logged with a placeholder.
+            content: assistantText.slice(0, 8000) || '[tool round — no reply text]',
             tool_calls: toolTrace,
           })
           .select('id')
           .single();
+        if (assistantError)
+          console.error('[chat] assistant message insert failed:', assistantError.message);
         if (inserted) messageId = str((inserted as Record<string, unknown>).id) || null;
         await db
           .from('conversations')

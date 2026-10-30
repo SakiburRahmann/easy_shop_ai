@@ -193,8 +193,9 @@ export function toOrderItemView(row: unknown, product?: unknown, variant?: unkno
   };
 }
 
-export function toOrderView(row: unknown, items: unknown[]): OrderView {
-  return { ...toOrder(row), items: items.map((i) => toOrderItemView(i)) };
+/** `items` are already-mapped DTOs — attached verbatim. */
+export function toOrderView(row: unknown, items: OrderItemView[]): OrderView {
+  return { ...toOrder(row), items };
 }
 
 export function toConversation(

@@ -1,5 +1,5 @@
 import type { Context, Next } from 'hono';
-import { forbidden, notFound } from './validation';
+import { notFound } from './validation';
 import type { Db } from './db';
 import type { EnvShape } from './env';
 import { toShop } from './serialize';
@@ -24,29 +24,25 @@ export async function requireAuth(c: Context<EnvShape>, next: Next) {
   await next();
 }
 
-/** Fetches `shopId` and ensures it belongs to the authenticated owner. */
-export async function ownedShop(c: Context<EnvShape>, shopId: string): Promise<Shop | null> {
+/**
+ * Fetches `shopId` and ensures it belongs to the authenticated owner.
+ * Returns the shop on success, a Response (403/404) otherwise — call sites
+ * MUST `return` the response when they see it.
+ */
+export async function ownedShop(c: Context<EnvShape>, shopId: string): Promise<Shop | Response> {
   const db = c.get('db');
   const authUser = c.get('authUser');
-  if (!authUser || !authUser.id) {
-    void forbidden(c);
-    return null;
-  }
+  if (!authUser || !authUser.id) return c.json({ error: 'Unauthorized' }, 401);
+
   const { data, error } = await db.from('shops').select('*').eq('id', shopId).maybeSingle();
-  if (error || !data) {
-    void notFound(c, 'Shop');
-    return null;
-  }
+  if (error || !data) return notFound(c, 'Shop');
   const shop = toShop(data);
-  if (shop.ownerId !== authUser.id) {
-    void forbidden(c);
-    return null;
-  }
+  if (shop.ownerId !== authUser.id) return c.json({ error: 'You do not have access to this shop' }, 403);
   return shop;
 }
 
 export async function ownerShopIdOf(db: Db, userId: string): Promise<string | null> {
-  const { data, error } = await db.from('shops').select('id').eq('owner_id', userId).maybeSingle();
+  const { data, error } = await db.from('shops').select('id').eq('owner_id', userId).limit(1).maybeSingle();
   if (error || !data) return null;
   const r = data as Record<string, unknown>;
   return typeof r.id === 'string' ? r.id : null;

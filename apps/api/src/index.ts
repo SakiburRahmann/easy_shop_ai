@@ -3,6 +3,7 @@
  * Everything web, mobile and storefront clients need flows through here.
  */
 import { Hono } from 'hono';
+import { HTTPException } from 'hono/http-exception';
 import { cors } from 'hono/cors';
 import { userRoleSchema } from '@easyshop/shared';
 import type { ApiBindings, EnvShape } from './lib/env';
@@ -59,6 +60,9 @@ export function createApp(): Hono<EnvShape> {
 
   app.notFound((c) => c.json({ error: 'Not found' }, 404));
   app.onError((err, c) => {
+    if (err instanceof HTTPException) {
+      return err.getResponse();
+    }
     console.error('Unhandled API error:', err);
     return c.json({ error: 'Internal server error' }, 500);
   });

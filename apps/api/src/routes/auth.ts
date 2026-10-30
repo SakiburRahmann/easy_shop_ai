@@ -14,7 +14,6 @@ export const authRoutes = new Hono<EnvShape>();
 
 authRoutes.post('/auth/signup', async (c) => {
   const input = await parseBody(c, signUpInputSchema);
-  if (!input) return;
   const db = c.get('db');
 
   // Admin API creates the user immediately confirmed (no email round-trip).
@@ -49,7 +48,6 @@ authRoutes.post('/auth/signup', async (c) => {
 
 authRoutes.post('/auth/login', async (c) => {
   const input = await parseBody(c, signInInputSchema);
-  if (!input) return;
   const db = c.get('db');
 
   const { data, error } = await db.auth.signInWithPassword({
