@@ -8,6 +8,7 @@ import {
   conversationUpdateInputSchema,
   messageSchema,
   shopCreateInputSchema,
+  shopDirectoryQuerySchema,
   shopSchema,
   shopUpdateInputSchema,
 } from '@easyshop/shared';
@@ -16,9 +17,55 @@ import { requireAuth, ownedShop } from '../lib/auth';
 import { notFound, param, parseBody } from '../lib/validation';
 import { slugify, slugVariants } from '../lib/slug';
 import { iso, num, str, strArr, strOrNull, toCategory, toMessage, toShop } from '../lib/serialize';
+import { sanitizePostgrestIlike, toDirectoryItems } from '../lib/directory';
 import type { AiSettings, Category, Conversation } from '@easyshop/shared';
 
 export const shopRoutes = new Hono<EnvShape>();
+
+/**
+ * Public marketplace directory: list shops for customer discovery. Requires
+ * no auth; exposes only presentational fields (never ownerId, floor prices
+ * or AI settings). Ordering: most products first, then newest.
+ */
+shopRoutes.get('/shops', async (c) => {
+  const sp = c.req.query();
+  const parsed = shopDirectoryQuerySchema.safeParse({
+    q: sp.q?.trim()?.slice(0, 120) || undefined,
+    limit: sp.limit ? Number(sp.limit) : undefined,
+    offset: sp.offset ? Number(sp.offset) : undefined,
+  });
+  if (!parsed.success) {
+    return c.json({ error: parsed.error.issues[0]?.message ?? 'Invalid query' }, 400);
+  }
+  const { q, limit, offset } = parsed.data;
+
+  const db = c.get('db');
+  let query = db
+    .from('shops')
+    .select('id, name, slug, description, template_id, theme, contact, created_at')
+    .order('created_at', { ascending: false })
+    .range(offset, offset + limit - 1);
+  if (q) {
+    const safe = sanitizePostgrestIlike(q);
+    query = safe.length > 0 ? query.or(`name.ilike.%${safe}%,description.ilike.%${safe}%`) : query;
+  }
+  const { data: shopRows, error: shopsError } = await query;
+  if (shopsError) return c.json({ error: shopsError.message }, 500);
+
+  const rows = shopRows ?? [];
+  if (rows.length === 0) return c.json([]);
+
+  const shopIds = rows.map((r) => str(r.id));
+  const { data: productRows, error: productsError } = await db
+    .from('products')
+    .select('shop_id, images, active')
+    .in('shop_id', shopIds)
+    .eq('active', true);
+  if (productsError) return c.json({ error: productsError.message }, 500);
+
+  const items = toDirectoryItems(rows, productRows ?? []);
+  return c.json(items);
+});
 
 shopRoutes.post('/shops', requireAuth, async (c) => {
   const input = await parseBody(c, shopCreateInputSchema);

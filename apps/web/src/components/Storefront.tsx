@@ -109,7 +109,6 @@ export default function Storefront() {
     </div>
   );
 }
-
 /* ─────────────────────────── catalog + orders ──────────────────────────── */
 
 interface BuyTarget {
@@ -149,8 +148,27 @@ function Catalog({ data, slug, accent }: { data: Storefront; slug: string; accen
     }
   };
 
+  const modern = data.shop.templateId === 'modern';
+
   return (
     <main className="mx-auto w-full max-w-5xl flex-1 px-4 py-8">
+      {modern ? (
+        <section
+          className="mb-8 flex flex-col gap-4 rounded-3xl px-8 py-10 text-white"
+          style={{ background: `linear-gradient(120deg, ${accent}, ${accent}99 70%, #0f172acc)` }}
+        >
+          <span className="w-fit rounded-full bg-white/20 px-3 py-1 text-xs font-medium backdrop-blur">
+            {data.shop.name} · new drops weekly
+          </span>
+          <p className="max-w-lg text-xl font-semibold leading-snug">
+            {data.shop.description || 'Explore our latest collection — curated for you.'}
+          </p>
+          <p className="text-sm text-white/75">
+            Need help choosing? The AI assistant (💬 bottom-right) knows every item, size and price.
+          </p>
+        </section>
+      ) : null}
+
       <div className="mb-6 flex flex-wrap items-center gap-2">
         <input
           value={q}
@@ -198,14 +216,24 @@ function Catalog({ data, slug, accent }: { data: Storefront; slug: string; accen
           No products found. Ask the assistant in chat!
         </p>
       ) : (
-        <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
+        <div
+          className={
+            modern
+              ? 'grid grid-cols-2 gap-5 sm:grid-cols-3 lg:grid-cols-4'
+              : 'grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4'
+          }
+        >
           {products.map((p) => (
             <button
               key={p.id}
               onClick={() => openBuy(p.id)}
-              className="group flex flex-col rounded-2xl border border-zinc-200 bg-white text-left shadow-sm transition hover:-translate-y-0.5 hover:shadow-md"
+              className={`group flex flex-col rounded-2xl border border-zinc-200 bg-white text-left shadow-sm transition hover:-translate-y-0.5 ${
+                modern ? 'overflow-hidden hover:shadow-lg' : 'hover:shadow-md'
+              }`}
             >
-              <div className="aspect-square w-full overflow-hidden rounded-t-2xl bg-zinc-100">
+              <div
+                className={`${modern ? 'aspect-[3/4]' : 'aspect-square'} w-full overflow-hidden bg-zinc-100`}
+              >
                 {p.images[0] ? (
                   <img src={p.images[0]} alt={p.name} className="h-full w-full object-cover" />
                 ) : (
