@@ -6,6 +6,12 @@ export interface ApiBindings {
   SUPABASE_URL: string;
   SUPABASE_SECRET_KEY: string;
   GEMINI_API_KEY: string;
+  /**
+   * Model rotation chain, comma separated (first entry is primary). Takes
+   * precedence over GEMINI_MODEL; unset → DEFAULT_MODEL_CHAIN in lib/gemini.
+   */
+  GEMINI_MODELS?: string;
+  /** Single-model chain (legacy/compat knob). */
   GEMINI_MODEL?: string;
   /** Max customer chat requests per minute per IP (default 20). */
   CHAT_RATE_LIMIT_PER_MIN?: string;
@@ -27,6 +33,3 @@ export interface EnvShape {
   };
 }
 
-export function geminiModel(env: ApiBindings): string {
-  return env.GEMINI_MODEL || 'gemini-3.5-flash';
-}

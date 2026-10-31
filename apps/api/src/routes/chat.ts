@@ -161,9 +161,11 @@ chatRoutes.post('/chat', async (c) => {
           break;
         }
 
-        if (result.error && !result.text && result.toolCalls.length === 0) {
+        if (result.error) {
+          // The chain is the retry mechanism (lib/gemini): reaching here means
+          // every model failed or a streamed answer was cut off mid-way.
           console.error('Gemini round failed:', result.error);
-          await send({ type: 'error', message: 'AI service is temporarily unavailable' });
+          await send({ type: 'error', message: result.error });
           break;
         }
 
