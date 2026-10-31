@@ -1,3 +1,0 @@
-#
-# Serve the same storefront shell for any /s/<slug> URL (static export).
-/s/*  /s.html  200

@@ -21,6 +21,12 @@ import { api, streamChat, taka, visitorId } from '@/lib/api';
 import { Badge, Button, ErrorNote, Field, Modal, Spinner, inputClass } from '@/components/ui';
 
 function slugFromPath(): string {
+  // Canonical storefront URL: /s?shop=<slug>. The pretty form /s/<slug>
+  // client-side is still parsed for future custom-domain deployments where
+  // the platform does not normalize deep paths.
+  const sp = new URLSearchParams(window.location.search);
+  const fromQuery = sp.get('shop');
+  if (fromQuery) return fromQuery;
   const match = window.location.pathname.match(/^\/s\/([^/]+)\/?$/);
   return match ? decodeURIComponent(match[1]) : '';
 }

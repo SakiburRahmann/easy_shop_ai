@@ -30,7 +30,7 @@ export default function Home() {
           </p>
           <div className="mx-auto mt-2 flex flex-col items-center gap-3 sm:flex-row">
             <a
-              href="/s/rahman-fashion"
+              href="/s?shop=rahman-fashion"
               className="rounded-full bg-emerald-600 px-6 py-3 text-sm font-semibold text-white shadow-sm transition hover:bg-emerald-700"
             >
               Try the demo store →
