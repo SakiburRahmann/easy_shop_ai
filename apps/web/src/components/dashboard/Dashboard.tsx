@@ -5,6 +5,7 @@
  * Speaks exclusively to easyshop-api with the seller's Supabase access token.
  */
 import { useCallback, useEffect, useState, type FormEvent } from 'react';
+import Link from 'next/link';
 import {
   type Session,
   type Shop,
@@ -13,6 +14,7 @@ import {
 } from '@easyshop/shared';
 import { api, ApiError, signIn } from '@/lib/api';
 import { Button, ErrorNote, Field, Spinner, inputClass } from '@/components/ui';
+import { Icon } from '@/lib/icons';
 import ProductsTab from './ProductsTab';
 import OrdersTab from './OrdersTab';
 import ChatsTab from './ChatsTab';
@@ -101,13 +103,19 @@ export default function Dashboard() {
 
   return (
     <div className="flex min-h-full flex-1 flex-col">
-      <header className="border-b border-zinc-200 bg-white">
-        <div className="mx-auto flex w-full max-w-5xl flex-wrap items-center gap-3 px-4 py-3">
-          <span className="text-lg font-bold tracking-tight">
-            Easy<span className="text-emerald-600">Shop</span>AI
-          </span>
+      <header className="sticky top-0 z-30 border-b border-zinc-200/80 bg-white/90 backdrop-blur">
+        <div className="mx-auto flex w-full max-w-5xl flex-wrap items-center gap-3 px-5 py-3">
+          <Link href="/" className="flex items-center gap-2">
+            <span className="flex h-8 w-8 items-center justify-center rounded-xl bg-brand-600 text-white shadow-sm shadow-brand-600/30">
+              <Icon.Store size={16} />
+            </span>
+            <span className="text-[17px] font-bold tracking-tight">
+              Easy<span className="text-brand-600">Shop</span>AI
+            </span>
+          </Link>
           {shop ? (
-            <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-xs font-medium text-emerald-700">
+            <span className="flex items-center gap-1.5 rounded-full bg-brand-50 px-2.5 py-1 text-xs font-medium text-brand-700">
+              <Icon.Store size={12} />
               {shop.name}
             </span>
           ) : null}
@@ -117,12 +125,13 @@ export default function Dashboard() {
                 href={`/s?shop=${shop.slug}`}
                 target="_blank"
                 rel="noopener"
-                className="text-emerald-600 hover:underline"
+                className="flex items-center gap-1.5 rounded-xl border border-zinc-200 bg-white px-3 py-1.5 text-[13px] font-medium text-zinc-700 shadow-sm transition hover:border-zinc-300 hover:text-brand-700"
               >
-                /s?shop={shop.slug} ↗
+                <Icon.Eye size={14} />
+                View store
               </a>
             ) : null}
-            <Button variant="ghost" onClick={logout}>
+            <Button variant="ghost" onClick={logout} icon={<Icon.Logout size={14} />}>
               Log out
             </Button>
           </div>
@@ -132,22 +141,25 @@ export default function Dashboard() {
       <div className="mx-auto w-full max-w-5xl flex-1 px-4 py-6">
         {shop ? (
           <>
-            <nav className="mb-6 flex gap-1 rounded-xl bg-zinc-100 p-1 text-sm font-medium">
+            <nav className="mb-6 flex gap-1 rounded-2xl bg-zinc-100 p-1 text-sm font-medium">
               {(
                 [
-                  ['products', 'Products'],
-                  ['orders', 'Orders'],
-                  ['chats', 'Chats'],
-                  ['settings', 'Settings'],
+                  ['products', 'Products', <Icon.Package key="p" size={15} />],
+                  ['orders', 'Orders', <Icon.Bag key="o" size={15} />],
+                  ['chats', 'Chats', <Icon.Message key="c" size={15} />],
+                  ['settings', 'Settings', <Icon.Palette key="s" size={15} />],
                 ] as const
-              ).map(([key, label]) => (
+              ).map(([key, label, icon]) => (
                 <button
                   key={key}
                   onClick={() => setTab(key)}
-                  className={`flex-1 rounded-lg px-3 py-2 transition ${
-                    tab === key ? 'bg-white shadow-sm' : 'text-zinc-500 hover:text-zinc-800'
+                  className={`flex flex-1 items-center justify-center gap-1.5 rounded-xl px-3 py-2 transition ${
+                    tab === key
+                      ? 'bg-white shadow-sm text-zinc-900'
+                      : 'text-zinc-500 hover:text-zinc-800'
                   }`}
                 >
+                  {icon}
                   {label}
                 </button>
               ))}
@@ -192,13 +204,18 @@ function LoginPanel({ onLogin }: { onLogin: (session: Session) => void }) {
     <div className="flex flex-1 items-center justify-center p-6">
       <form
         onSubmit={submit}
-        className="flex w-full max-w-sm flex-col gap-4 rounded-2xl border border-zinc-200 bg-white p-8 shadow-sm"
+        className="flex w-full max-w-sm flex-col gap-4 rounded-3xl border border-zinc-200/80 bg-white p-8 shadow-xl shadow-zinc-900/[0.04]"
       >
-        <div className="text-center">
-          <h1 className="text-xl font-bold">
-            Easy<span className="text-emerald-600">Shop</span>AI
-          </h1>
-          <p className="mt-1 text-sm text-zinc-500">Seller sign in</p>
+        <div className="flex flex-col items-center gap-3 text-center">
+          <span className="flex h-12 w-12 items-center justify-center rounded-2xl bg-brand-600 text-white shadow-md shadow-brand-600/30">
+            <Icon.Store size={20} />
+          </span>
+          <div>
+            <h1 className="text-xl font-bold tracking-tight">
+              Easy<span className="text-brand-600">Shop</span>AI
+            </h1>
+            <p className="mt-1 text-sm text-zinc-500">Sign in to run your store</p>
+          </div>
         </div>
         <Field label="Email">
           <input
@@ -219,7 +236,7 @@ function LoginPanel({ onLogin }: { onLogin: (session: Session) => void }) {
           />
         </Field>
         <ErrorNote message={error} />
-        <Button type="submit" disabled={busy} className="w-full">
+        <Button type="submit" disabled={busy} className="w-full" size="lg">
           {busy ? 'Signing in…' : 'Sign in'}
         </Button>
         <p className="text-center text-xs text-zinc-400">
@@ -296,9 +313,14 @@ function Onboarding({
 
   return (
     <div className="flex flex-1 justify-center p-6">
-      <div className="flex w-full max-w-xl flex-col gap-5 rounded-2xl border border-zinc-200 bg-white p-8 shadow-sm">
+      <div className="flex w-full max-w-xl flex-col gap-5 rounded-3xl border border-zinc-200/80 bg-white p-8 shadow-xl shadow-zinc-900/[0.04]">
         <div>
-          <h1 className="text-lg font-semibold">Set up your online shop</h1>
+          <h1 className="flex items-center gap-2 text-lg font-semibold tracking-tight">
+            <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-brand-600 text-white">
+              <Icon.Store size={14} />
+            </span>
+            Set up your online shop
+          </h1>
           <p className="text-sm text-zinc-500">
             Signed in as {email} — three quick steps and your store is live with its own AI agent.
           </p>
@@ -306,7 +328,7 @@ function Onboarding({
             {[1, 2, 3].map((n) => (
               <span
                 key={n}
-                className={`h-1.5 flex-1 rounded-full ${n <= step ? 'bg-emerald-600' : 'bg-zinc-200'}`}
+                className={`h-1.5 flex-1 rounded-full ${n <= step ? 'bg-brand-600' : 'bg-zinc-200'}`}
               />
             ))}
           </div>
@@ -347,8 +369,9 @@ function Onboarding({
                 else setError('Please enter your shop name');
               }}
               className="self-end"
+              icon={<Icon.ArrowRight size={15} />}
             >
-              Continue →
+              Continue
             </Button>
           </div>
         ) : null}
@@ -368,7 +391,7 @@ function Onboarding({
                     onClick={() => setTemplate(val)}
                     className={`flex flex-col items-start rounded-xl border p-4 text-left transition ${
                       template === val
-                        ? 'border-emerald-500 bg-emerald-50 ring-1 ring-emerald-300'
+                        ? 'border-brand-500 bg-brand-50 ring-1 ring-brand-300'
                         : 'border-zinc-200 hover:bg-zinc-50'
                     }`}
                   >
@@ -429,10 +452,16 @@ function Onboarding({
               </div>
             </Field>
             <div className="flex justify-between">
-              <Button variant="ghost" onClick={() => setStep(1)}>
-                ← Back
+              <Button
+                variant="ghost"
+                onClick={() => setStep(1)}
+                icon={<Icon.ArrowLeft size={15} />}
+              >
+                Back
               </Button>
-              <Button onClick={() => setStep(3)}>Continue →</Button>
+              <Button onClick={() => setStep(3)} icon={<Icon.ArrowRight size={15} />}>
+                Continue
+              </Button>
             </div>
           </div>
         ) : null}
@@ -482,11 +511,15 @@ function Onboarding({
               English are supported.
             </p>
             <div className="flex justify-between">
-              <Button variant="ghost" onClick={() => setStep(2)}>
-                ← Back
+              <Button
+                variant="ghost"
+                onClick={() => setStep(2)}
+                icon={<Icon.ArrowLeft size={15} />}
+              >
+                Back
               </Button>
-              <Button onClick={() => void create()} disabled={busy}>
-                {busy ? 'Creating your store…' : 'Create shop ✓'}
+              <Button onClick={() => void create()} disabled={busy} icon={<Icon.Check size={15} />}>
+                {busy ? 'Creating your store…' : 'Create shop'}
               </Button>
             </div>
           </div>

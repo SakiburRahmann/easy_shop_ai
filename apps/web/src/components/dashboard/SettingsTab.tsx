@@ -3,15 +3,16 @@
 /** Shop settings (profile, contact, theme) and AI assistant settings. */
 import { useEffect, useState, type FormEvent } from 'react';
 import {
-  aiLanguageSchema,
   aiSettingsSchema,
   aiSettingsUpdateInputSchema,
   type AiSettings,
   shopSchema,
   type Shop,
   shopUpdateInputSchema,
+  uploadResultSchema,
 } from '@easyshop/shared';
 import { Badge, Button, ErrorNote, Field, OkNote, inputClass } from '@/components/ui';
+import { Icon } from '@/lib/icons';
 import type { Api } from './Dashboard';
 
 export default function SettingsTab({
@@ -40,6 +41,7 @@ function ShopSettings({
   shop: Shop;
   onShopChange: (shop: Shop) => void;
 }) {
+  const [logoUrl, setLogoUrl] = useState(shop.logoUrl ?? '');
   const [name, setName] = useState(shop.name);
   const [description, setDescription] = useState(shop.description ?? '');
   const [phone, setPhone] = useState(shop.contact.phone ?? '');
@@ -67,6 +69,7 @@ function ShopSettings({
         ...(returnPolicy ? { returnPolicy } : {}),
         ...(notes ? { notes } : {}),
       },
+      logoUrl: logoUrl || null,
     });
     if (!input.success) {
       setErr(input.error.issues[0]?.message ?? 'Invalid settings');
@@ -89,18 +92,47 @@ function ShopSettings({
     }
   };
 
+  const uploadLogo = async (file: File) => {
+    setBusy(true);
+    setErr(null);
+    setOk(null);
+    try {
+      const dataBase64 = btoa(
+        Array.from(new Uint8Array(await file.arrayBuffer()), (b) => String.fromCharCode(b)).join(
+          '',
+        ),
+      );
+      const res = uploadResultSchema.parse(
+        await auth<unknown>('/uploads', {
+          body: { filename: file.name, contentType: file.type, dataBase64 },
+        }),
+      );
+      setLogoUrl(res.url);
+      setOk('Logo uploaded — press “Save shop” to apply it.');
+    } catch (e2) {
+      setErr(e2 instanceof Error ? e2.message : 'Upload failed (image must be < 4.5 MB)');
+    } finally {
+      setBusy(false);
+    }
+  };
+
   return (
     <form
       onSubmit={save}
       className="flex flex-col gap-4 rounded-2xl border border-zinc-200 bg-white p-6"
     >
       <div className="flex flex-wrap items-center gap-3">
-        <h2 className="text-lg font-semibold">Shop</h2>
+        <h2 className="flex items-center gap-2 text-lg font-semibold tracking-tight">
+          <span className="flex h-8 w-8 items-center justify-center rounded-xl bg-brand-50 text-brand-600">
+            <Icon.Palette size={15} />
+          </span>
+          Shop
+        </h2>
         {shop.deliveryRules.zones.length ? (
           <div className="flex flex-wrap gap-1">
             {shop.deliveryRules.zones.map((z) => (
-              <Badge key={z.name}>
-                {z.name} · ৳{z.charge} · {z.etaDays}d
+              <Badge key={z.name} icon={<Icon.Truck size={11} />}>
+                {z.name} · {z.charge} ৳ · {z.etaDays}d
               </Badge>
             ))}
           </div>
@@ -118,11 +150,22 @@ function ShopSettings({
           />
         </Field>
         <Field label="Storefront URL">
-          <input
-            value={`/s?shop=${shop.slug}`}
-            readOnly
-            className={`${inputClass} bg-zinc-50 text-zinc-500`}
-          />
+          <div className="flex gap-2">
+            <input
+              value={`/s?shop=${shop.slug}`}
+              readOnly
+              className={`${inputClass} flex-1 bg-zinc-50 text-zinc-500`}
+            />
+            <a
+              href={`/s?shop=${shop.slug}`}
+              target="_blank"
+              rel="noopener"
+              className="flex shrink-0 items-center gap-1.5 rounded-xl bg-brand-50 px-3 py-2.5 text-sm font-medium text-brand-700 transition hover:bg-brand-100"
+            >
+              <Icon.Eye size={14} />
+              View
+            </a>
+          </div>
         </Field>
       </div>
       <Field label="Description">
@@ -150,6 +193,36 @@ function ShopSettings({
         </Field>
       </div>
       <div className="grid gap-4 sm:grid-cols-2">
+        <Field label="Logo" hint="Shows in the storefront header (square works best)">
+          <div className="flex items-center gap-2.5">
+            <span className="flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-zinc-100 text-zinc-300">
+              {logoUrl ? (
+                <img src={logoUrl} alt="Shop logo" className="h-full w-full object-cover" />
+              ) : (
+                <Icon.Image size={18} />
+              )}
+            </span>
+            <label className="flex cursor-pointer items-center gap-1.5 rounded-xl border border-zinc-200 bg-white px-3 py-2 text-[13px] text-zinc-700 shadow-sm transition hover:border-zinc-300 hover:bg-zinc-50">
+              <Icon.Upload size={14} className="text-zinc-400" />
+              Upload
+              <input
+                type="file"
+                accept="image/jpeg,image/png,image/webp,image/gif"
+                className="hidden"
+                onChange={(e) => e.target.files?.[0] && void uploadLogo(e.target.files[0])}
+              />
+            </label>
+            {logoUrl ? (
+              <button
+                type="button"
+                onClick={() => setLogoUrl('')}
+                className="text-xs text-zinc-400 underline hover:text-red-600"
+              >
+                remove
+              </button>
+            ) : null}
+          </div>
+        </Field>
         <Field label="Theme color" hint="Storefront header + chat accent">
           <div className="flex items-center gap-2">
             <input
@@ -165,15 +238,15 @@ function ShopSettings({
             />
           </div>
         </Field>
-        <Field label="Storefront notes">
-          <input
-            value={notes}
-            onChange={(e) => setNotes(e.target.value)}
-            maxLength={2000}
-            className={inputClass}
-          />
-        </Field>
       </div>
+      <Field label="Storefront notes">
+        <input
+          value={notes}
+          onChange={(e) => setNotes(e.target.value)}
+          maxLength={2000}
+          className={inputClass}
+        />
+      </Field>
       <Field label="Return policy">
         <textarea
           value={returnPolicy}
@@ -264,8 +337,13 @@ function AiSettingsCard({ auth, shop }: { auth: Api; shop: Shop }) {
   return (
     <div className="flex flex-col gap-4 rounded-2xl border border-zinc-200 bg-white p-6">
       <div className="flex flex-wrap items-center gap-2">
-        <h2 className="text-lg font-semibold">AI assistant</h2>
-        <Badge tone={settings ? 'green' : 'amber'}>{settings ? 'initialized' : '…'}</Badge>
+        <h2 className="flex items-center gap-2 text-lg font-semibold tracking-tight">
+          <span className="flex h-8 w-8 items-center justify-center rounded-xl bg-brand-50 text-brand-600">
+            <Icon.Spark size={15} />
+          </span>
+          AI assistant
+        </h2>
+        <Badge tone={settings ? 'green' : 'amber'}>{settings ? 'initialized' : 'loading…'}</Badge>
       </div>
       <div className="grid gap-4 sm:grid-cols-3">
         <Field label="Tone" hint="How it talks to customers">
@@ -334,9 +412,6 @@ function AiSettingsCard({ auth, shop }: { auth: Api; shop: Shop }) {
         <OkNote message={ok} />
       </div>
       <ErrorNote message={err} />
-      <p className="text-xs text-zinc-400">
-        aiLanguageSchema values: {[...aiLanguageSchema.options].join(', ')}
-      </p>
     </div>
   );
 }

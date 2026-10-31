@@ -17,6 +17,7 @@ import { api, taka } from '@/lib/api';
 import {
   Badge,
   Button,
+  EmptyState,
   ErrorNote,
   Field,
   Modal,
@@ -24,6 +25,7 @@ import {
   Spinner,
   inputClass,
 } from '@/components/ui';
+import { Icon } from '@/lib/icons';
 import type { Api } from './Dashboard';
 
 export default function ProductsTab({ auth, shop }: { auth: Api; shop: Shop }) {
@@ -86,8 +88,10 @@ export default function ProductsTab({ auth, shop }: { auth: Api; shop: Shop }) {
   return (
     <div className="flex flex-col gap-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <h2 className="text-lg font-semibold">Products ({products?.length ?? 0})</h2>
-        <Button onClick={() => setCreateOpen(true)}>+ New product</Button>
+        <h2 className="text-lg font-semibold tracking-tight">Products ({products?.length ?? 0})</h2>
+        <Button onClick={() => setCreateOpen(true)} icon={<Icon.Plus size={15} />}>
+          New product
+        </Button>
       </div>
       <ErrorNote message={error} />
       <OkNote message={notice} />
@@ -95,9 +99,15 @@ export default function ProductsTab({ auth, shop }: { auth: Api; shop: Shop }) {
       {products === null ? (
         <Spinner />
       ) : products.length === 0 ? (
-        <p className="rounded-xl border border-dashed border-zinc-300 p-10 text-center text-sm text-zinc-500">
-          No products yet. Create your first product — the AI assistant will then find it in chats.
-        </p>
+        <EmptyState
+          title="No products yet"
+          body="Create your first product — inventory, floor price and all. The AI assistant will then find it in customer chats."
+          action={
+            <Button onClick={() => setCreateOpen(true)} icon={<Icon.Plus size={15} />}>
+              New product
+            </Button>
+          }
+        />
       ) : (
         <ul className="flex flex-col gap-2">
           {products.map((p) => (
@@ -112,6 +122,13 @@ export default function ProductsTab({ auth, shop }: { auth: Api; shop: Shop }) {
         </ul>
       )}
 
+      <CategoriesManager
+        auth={auth}
+        shop={shop}
+        categories={categories}
+        onReload={() => void reload()}
+      />
+
       <CreateProductModal
         open={createOpen}
         onClose={() => setCreateOpen(false)}
@@ -120,6 +137,103 @@ export default function ProductsTab({ auth, shop }: { auth: Api; shop: Shop }) {
         categories={categories}
         onCreated={createProduct}
       />
+    </div>
+  );
+}
+
+/* ───────────────────────── categories manager ─────────────────────────── */
+
+function CategoriesManager({
+  auth,
+  shop,
+  categories,
+  onReload,
+}: {
+  auth: Api;
+  shop: Shop;
+  categories: Category[];
+  onReload: () => void;
+}) {
+  const [name, setName] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+
+  const add = async () => {
+    const trimmed = name.trim();
+    if (!trimmed || busy) return;
+    setBusy(true);
+    setErr(null);
+    try {
+      await auth(`/shops/${shop.id}/categories`, { body: { name: trimmed } });
+      setName('');
+      onReload();
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : 'Could not add category');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const remove = async (id: string, label: string) => {
+    if (busy) return;
+    setBusy(true);
+    setErr(null);
+    try {
+      await auth(`/categories/${id}`, { method: 'DELETE' });
+      onReload();
+    } catch {
+      setErr(`Could not delete “${label}” — products may still use it.`);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div className="rounded-2xl border border-zinc-200 bg-white p-4">
+      <div className="flex flex-wrap items-center gap-2">
+        <span className="flex items-center gap-1.5 text-sm font-medium text-zinc-700">
+          <Icon.Tag size={14} className="text-brand-600" />
+          Categories
+        </span>
+        <div className="flex flex-wrap gap-1.5">
+          {categories.map((c) => (
+            <span
+              key={c.id}
+              className="flex items-center gap-1 rounded-full border border-zinc-200 bg-zinc-50 py-1 pl-3 pr-1.5 text-xs font-medium text-zinc-700"
+            >
+              {c.name}
+              <button
+                type="button"
+                aria-label={`Delete category ${c.name}`}
+                onClick={() => void remove(c.id, c.name)}
+                disabled={busy}
+                className="rounded-full p-0.5 text-zinc-400 transition hover:bg-zinc-200 hover:text-red-600 disabled:opacity-40"
+              >
+                <Icon.Trash size={12} />
+              </button>
+            </span>
+          ))}
+        </div>
+        <div className="flex items-center gap-1.5">
+          <input
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            onKeyDown={(e) => e.key === 'Enter' && void add()}
+            placeholder="Add a category…"
+            maxLength={40}
+            className="h-8 w-40 rounded-lg border border-zinc-200 bg-white px-2.5 text-sm outline-none transition placeholder:text-zinc-400 focus:border-brand-500 focus:ring-4 focus:ring-brand-500/10"
+          />
+          <Button
+            size="sm"
+            variant="soft"
+            onClick={() => void add()}
+            disabled={busy || !name.trim()}
+          >
+            Add
+          </Button>
+        </div>
+      </div>
+      <ErrorNote message={err} />
     </div>
   );
 }
@@ -162,9 +276,9 @@ function ProductRow({
   };
 
   return (
-    <li className="rounded-xl border border-zinc-200 bg-white">
+    <li className="rounded-2xl border border-zinc-200 bg-white transition hover:border-zinc-300 hover:shadow-sm">
       <div className="flex flex-wrap items-center gap-3 p-3">
-        <div className="h-12 w-12 shrink-0 overflow-hidden rounded-lg bg-zinc-100">
+        <div className="flex h-12 w-12 shrink-0 overflow-hidden rounded-xl bg-zinc-100">
           {product.images[0] ? (
             <img
               src={product.images[0]}
@@ -172,28 +286,40 @@ function ProductRow({
               className="h-full w-full object-cover"
             />
           ) : (
-            <div className="flex h-full w-full items-center justify-center text-zinc-300">🛍️</div>
+            <div className="flex h-full w-full items-center justify-center text-zinc-300">
+              <Icon.Package size={18} />
+            </div>
           )}
         </div>
         <div className="flex min-w-40 flex-1 flex-col">
           <span className="text-sm font-medium">{product.name}</span>
           <span className="text-xs text-zinc-500">
-            {taka(product.price)} · floor {taka(product.floorPrice)} · stock {stock}
+            <span className="font-semibold text-zinc-700">{taka(product.price)}</span> · floor{' '}
+            {taka(product.floorPrice)} · stock {stock}
           </span>
         </div>
-        {product.active ? <Badge tone="green">active</Badge> : <Badge tone="amber">hidden</Badge>}
+        {product.active ? (
+          <Badge tone="green" icon={<Icon.Check size={11} />}>
+            live
+          </Badge>
+        ) : (
+          <Badge tone="amber" icon={<Icon.Eye size={11} />}>
+            hidden
+          </Badge>
+        )}
         <div className="flex gap-2">
           <Button
             variant="ghost"
+            size="sm"
             onClick={() => void patch({ active: !product.active })}
             disabled={busy}
           >
             {product.active ? 'Hide' : 'Show'}
           </Button>
-          <Button variant="ghost" onClick={() => setOpen((o) => !o)}>
+          <Button variant="ghost" size="sm" onClick={() => setOpen((o) => !o)}>
             {open ? 'Close' : 'Manage'}
           </Button>
-          <Button variant="danger" onClick={remove} disabled={busy}>
+          <Button variant="danger" size="sm" onClick={remove} disabled={busy}>
             Delete
           </Button>
         </div>
@@ -345,7 +471,8 @@ function ProductDetails({
         <Button onClick={save} disabled={busy}>
           Save changes
         </Button>
-        <label className="cursor-pointer rounded-lg border border-zinc-300 bg-white px-3 py-1.5 text-sm hover:bg-zinc-100">
+        <label className="flex cursor-pointer items-center gap-1.5 rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-700 shadow-sm transition hover:border-zinc-300 hover:bg-zinc-50">
+          <Icon.Upload size={14} className="text-zinc-400" />
           Upload image
           <input
             type="file"
@@ -387,8 +514,14 @@ function ProductDetails({
                 {v.priceOverride !== null && v.priceOverride !== undefined ? (
                   <Badge>{taka(v.priceOverride)}</Badge>
                 ) : null}
-                <Button variant="danger" onClick={() => void deleteVariant(v.id)} disabled={busy}>
-                  ✕
+                <Button
+                  variant="danger"
+                  size="sm"
+                  onClick={() => void deleteVariant(v.id)}
+                  disabled={busy}
+                  aria-label="Delete variant"
+                >
+                  <Icon.Trash size={13} />
                 </Button>
               </li>
             ))
@@ -550,10 +683,11 @@ function CreateProductModal({
                   </span>
                   <button
                     type="button"
-                    className="text-red-500"
+                    aria-label="Remove variant row"
+                    className="rounded-full p-1 text-zinc-400 transition hover:bg-zinc-100 hover:text-red-600"
                     onClick={() => setVariants((vs) => vs.filter((_, j) => j !== i))}
                   >
-                    ✕
+                    <Icon.X size={13} />
                   </button>
                 </li>
               ))}

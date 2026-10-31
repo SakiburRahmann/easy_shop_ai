@@ -84,7 +84,9 @@ export const shopCreateInputSchema = z.object({
 });
 export type ShopCreateInput = z.infer<typeof shopCreateInputSchema>;
 
-export const shopUpdateInputSchema = shopCreateInputSchema.partial();
+export const shopUpdateInputSchema = shopCreateInputSchema
+  .partial()
+  .extend({ logoUrl: z.url().nullish() });
 export type ShopUpdateInput = z.infer<typeof shopUpdateInputSchema>;
 
 /* -------------------------------------------------------------------------- */

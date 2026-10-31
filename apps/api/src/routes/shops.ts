@@ -130,6 +130,9 @@ shopRoutes.patch('/shops/:shopId', requireAuth, async (c) => {
       ...(input.contact !== undefined ? { contact: input.contact } : {}),
       ...(input.deliveryRules !== undefined ? { delivery_rules: input.deliveryRules } : {}),
       ...(input.policies !== undefined ? { policies: input.policies } : {}),
+      ...(Object.prototype.hasOwnProperty.call(input, 'logoUrl')
+        ? { logo_url: input.logoUrl ?? null }
+        : {}),
     })
     .eq('id', shop.id)
     .select('*')
