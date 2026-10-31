@@ -9,10 +9,14 @@ Multi-tenant platform for small online sellers (F-commerce, starting Bangladesh)
 
 1. **Instant storefront** — a seller signs up, adds shop details and products, picks a template,
    and gets a live store at `easyshopai.app/s/<shop-slug>` within minutes.
-2. **AI sales assistant** — a chat assistant on every storefront that talks to customers in
+2. **Marketplace discovery** — customers also arrive through EasyShopAI itself: the home page lists
+   all shops (`GET /shops` public directory) so the platform is a buying destination, not only a
+   set of storefronts (Shopify-like: sellers open their store, customers browse shops).
+3. **AI sales assistant** — a chat agent on every storefront that talks to customers in
    Bangla, English or Banglish. It finds products from the real catalog, answers questions about
-   price, stock, delivery and policies, negotiates within the seller's rules, and collects COD
-   order details.
+   price, stock, delivery (`get_shop_info` returns zones, charges, ETA) and policies, negotiates
+   within the seller's rules, and collects COD order details — acting as the shop's full
+   customer-service agent.
 
 One account and one data source across web and mobile. Future work (not in MVP): Meta Messenger
 integration, live payments, courier APIs, voice.
@@ -103,8 +107,13 @@ Order statuses: `pending → confirmed → shipped → delivered` (+ `cancelled`
 ## 7. API surface (draft — refine as endpoints are built)
 
 - `POST /auth/*` — via Supabase
+- `GET /shops` (public marketplace directory: shop cards with product counts and catalog images; `?q=&limit=&offset=`)
 - `POST /shops`, `GET/PATCH /shops/:id` (seller)
-- `GET /shops/:slug/storefront` (public), `GET /shops/:slug/products`, `GET /products/:id`
+- `GET /s/:slug` (public storefront payload), `GET /s/:slug/products`, `GET /products/:id`
+- Storefront URLs on the static site: `/s?shop=<slug>` (Cloudflare Pages normalizes deep
+  `/s/<slug>` paths to `/s`; the shell reads the slug from the query)
+- Templates render distinct storefront layouts: `classic` (clean catalog grid) and `modern`
+  (hero banner + editorial product cards), both using `theme.primaryColor`
 - `POST /products`, `PATCH /products/:id`, `DELETE /products/:id` (seller, shop-scoped)
 - `POST /uploads` — image upload (Supabase Storage)
 - `POST /orders`, `GET /orders` (seller), `PATCH /orders/:id/status`

@@ -88,6 +88,33 @@ export const shopUpdateInputSchema = shopCreateInputSchema.partial();
 export type ShopUpdateInput = z.infer<typeof shopUpdateInputSchema>;
 
 /* -------------------------------------------------------------------------- */
+/* Marketplace directory (public discovery)                                   */
+/* -------------------------------------------------------------------------- */
+
+/** Public shop-card payload for the marketplace. No per-shop secrets. */
+export const shopDirectoryItemSchema = z.object({
+  id: uuidSchema,
+  name: z.string().min(1).max(80),
+  slug: shopSlugSchema,
+  description: z.string().max(1000).nullish(),
+  templateId: templateIdSchema,
+  theme: shopThemeSchema,
+  contact: shopContactSchema,
+  /** Number of active catalog items — lets the marketplace rank full shops. */
+  productCount: z.number().int().min(0),
+  /** Up to four product images for the shop card collage. */
+  topImages: z.array(z.url().max(500)).max(4),
+});
+export type ShopDirectoryItem = z.infer<typeof shopDirectoryItemSchema>;
+
+export const shopDirectoryQuerySchema = z.object({
+  q: z.string().max(120).optional(),
+  limit: z.number().int().min(1).max(50).default(24),
+  offset: z.number().int().min(0).default(0),
+});
+export type ShopDirectoryQuery = z.infer<typeof shopDirectoryQuerySchema>;
+
+/* -------------------------------------------------------------------------- */
 /* AI settings (per shop)                                                     */
 /* -------------------------------------------------------------------------- */
 
