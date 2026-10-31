@@ -106,13 +106,23 @@ export const DEFAULT_MODEL_CHAIN: readonly string[] = [
 /** Parses a comma-separated chain from env; empty/invalid entries collapse. */
 export function parseModelChain(raw: string | undefined, fallback: readonly string[]): string[] {
   if (!raw) return [...fallback];
-  const parsed = [...new Set(raw.split(',').map((s) => s.trim()).filter(Boolean))].slice(0, 8);
+  const parsed = [
+    ...new Set(
+      raw
+        .split(',')
+        .map((s) => s.trim())
+        .filter(Boolean),
+    ),
+  ].slice(0, 8);
   return parsed.length > 0 ? parsed : [...fallback];
 }
 
 /** The rated model chain for this worker. */
 export function geminiModelChain(env: ApiBindings): string[] {
-  return parseModelChain(env.GEMINI_MODELS, env.GEMINI_MODEL ? [env.GEMINI_MODEL] : DEFAULT_MODEL_CHAIN);
+  return parseModelChain(
+    env.GEMINI_MODELS,
+    env.GEMINI_MODEL ? [env.GEMINI_MODEL] : DEFAULT_MODEL_CHAIN,
+  );
 }
 
 /* ════════════════════════════════════════════════════════ circuits ════ */
@@ -154,7 +164,8 @@ export function parseBodyDelayMs(body: string): number | null {
   if (field) {
     const n = Number(field[1]);
     const unit = (field[2] ?? 's').toLowerCase();
-    if (Number.isFinite(n)) return Math.round(n * (unit === 'h' ? 3_600_000 : unit === 'm' ? 60_000 : 1_000));
+    if (Number.isFinite(n))
+      return Math.round(n * (unit === 'h' ? 3_600_000 : unit === 'm' ? 60_000 : 1_000));
   }
   const free = /\b(\d+)h(\d+)?m?((?:\d|\.)+)?s?\b/.exec(body);
   if (free) {
@@ -200,7 +211,12 @@ export function classifyFailure(
     return { kind: 'auth', status, retryAfterMs: after, message: 'The API key was rejected.' };
   }
   if (status === 404) {
-    return { kind: 'model_not_found', status, retryAfterMs: after, message: 'Model id is unavailable.' };
+    return {
+      kind: 'model_not_found',
+      status,
+      retryAfterMs: after,
+      message: 'Model id is unavailable.',
+    };
   }
   if (status === 400) {
     // "no longer available to new users" style 400s behave like model-not-found.
@@ -210,8 +226,18 @@ export function classifyFailure(
         bodyLower.includes('does not exist') ||
         bodyLower.includes('no longer available'));
     return notAvailable
-      ? { kind: 'model_not_found', status, retryAfterMs: after, message: 'Model id is unavailable.' }
-      : { kind: 'bad_request', status, retryAfterMs: after, message: 'Request rejected by the provider.' };
+      ? {
+          kind: 'model_not_found',
+          status,
+          retryAfterMs: after,
+          message: 'Model id is unavailable.',
+        }
+      : {
+          kind: 'bad_request',
+          status,
+          retryAfterMs: after,
+          message: 'Request rejected by the provider.',
+        };
   }
   if (status === 408 || (status !== undefined && status >= 500)) {
     return { kind: 'server', status, retryAfterMs: after, message: 'Temporary provider failure.' };
@@ -364,7 +390,12 @@ export async function streamGeminiRound(
     if (attempt.emitted) {
       // Text already reached the user: restarting on another model would
       // duplicate or mix answers — report the interruption instead.
-      return { text: attempt.text, toolCalls: [], parts: attempt.parts, error: chatMessageFor(attempt.failure) };
+      return {
+        text: attempt.text,
+        toolCalls: [],
+        parts: attempt.parts,
+        error: chatMessageFor(attempt.failure),
+      };
     }
     // Nothing emitted: fall through to the next model. bad_request falls
     // through as well — the request was validated before the provider call,

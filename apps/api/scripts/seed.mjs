@@ -19,7 +19,10 @@ function readEnvFile(path) {
     const eq = t.indexOf('=');
     if (eq <= 0) continue;
     const key = t.slice(0, eq).trim();
-    const value = t.slice(eq + 1).trim().replace(/^["'](.*)["']$/, '$1');
+    const value = t
+      .slice(eq + 1)
+      .trim()
+      .replace(/^["'](.*)["']$/, '$1');
     if (!(key in out)) out[key] = value;
   }
   return out;
@@ -67,7 +70,11 @@ async function main() {
   });
   if (created.status === 200 || created.status === 201) {
     console.log(`✓ demo seller created (${DEMO_EMAIL})`);
-  } else if (created.json?.msg?.includes('already') || created.json?.error_description?.includes('already') || created.status === 422) {
+  } else if (
+    created.json?.msg?.includes('already') ||
+    created.json?.error_description?.includes('already') ||
+    created.status === 422
+  ) {
     console.log('= demo seller already exists');
   } else {
     console.error('x seller creation failed', created.status, created.text.slice(0, 300));
@@ -82,7 +89,11 @@ async function main() {
   const loginJson = await login.json().catch(() => null);
   const sellerId = loginJson?.user?.id;
   if (!sellerId) {
-    console.error('x could not resolve demo seller id', login.status, JSON.stringify(loginJson).slice(0, 300));
+    console.error(
+      'x could not resolve demo seller id',
+      login.status,
+      JSON.stringify(loginJson).slice(0, 300),
+    );
     process.exit(1);
   }
   console.log(`✓ demo seller id ${sellerId}`);
@@ -114,7 +125,8 @@ async function main() {
       ],
     },
     policies: {
-      returnPolicy: '7 দিনের মধ্যে অব্যবহৃত পণ্য রসিদসহ ফেরত দেওয়া যাবে। (7-day return for unused items with receipt.)',
+      returnPolicy:
+        '7 দিনের মধ্যে অব্যবহৃত পণ্য রসিদসহ ফেরত দেওয়া যাবে। (7-day return for unused items with receipt.)',
       notes: 'We pack with care and ship nationwide.',
     },
   });
@@ -138,7 +150,11 @@ async function main() {
 
   // 4. Categories -----------------------------------------------------------
   const catNames = ['T-Shirt', 'Saree', 'Panjabi', 'Kids', 'Shirt'];
-  const cats = await rest('/rest/v1/categories', 'POST', catNames.map((name) => ({ shop_id: shopRow.id, name })));
+  const cats = await rest(
+    '/rest/v1/categories',
+    'POST',
+    catNames.map((name) => ({ shop_id: shopRow.id, name })),
+  );
   const catRows = Array.isArray(cats.json) ? cats.json : [];
   const catId = Object.fromEntries(catRows.map((c) => [c.name, c.id]));
   console.log(`✓ ${catRows.length} categories`);
@@ -149,7 +165,8 @@ async function main() {
   const products = [
     {
       name: 'লাল কটন টি-শার্ট (Red Cotton T-Shirt)',
-      description: '100% কটন, গরমের জন্য পারফেক্ট। রঙ ফেড হয় না। (100% cotton mid-weight tee, does not fade.)',
+      description:
+        '100% কটন, গরমের জন্য পারফেক্ট। রঙ ফেড হয় না। (100% cotton mid-weight tee, does not fade.)',
       category_id: catId['T-Shirt'],
       price: 650,
       floor_price: 500,
@@ -207,7 +224,8 @@ async function main() {
     },
     {
       name: 'Kids Printed Tee',
-      description: 'খাটুনি কটন বাচ্চাদের টি-শার্ট, প্রিন্ট সুন্দর ও টিকে থাকে। (Soft combed-cotton kids tee with a durable print.)',
+      description:
+        'খাটুনি কটন বাচ্চাদের টি-শার্ট, প্রিন্ট সুন্দর ও টিকে থাকে। (Soft combed-cotton kids tee with a durable print.)',
       category_id: catId['Kids'],
       price: 450,
       floor_price: 350,
@@ -231,16 +249,20 @@ async function main() {
     },
   ];
 
-  const prods = await rest('/rest/v1/products', 'POST', products.map((p) => ({
-    shop_id: shopRow.id,
-    category_id: p.category_id ?? null,
-    name: p.name,
-    description: p.description,
-    price: p.price.toFixed(2),
-    floor_price: p.floor_price.toFixed(2),
-    images: p.images,
-    active: true,
-  })));
+  const prods = await rest(
+    '/rest/v1/products',
+    'POST',
+    products.map((p) => ({
+      shop_id: shopRow.id,
+      category_id: p.category_id ?? null,
+      name: p.name,
+      description: p.description,
+      price: p.price.toFixed(2),
+      floor_price: p.floor_price.toFixed(2),
+      images: p.images,
+      active: true,
+    })),
+  );
   const prodRows = Array.isArray(prods.json) ? prods.json : [];
   if (prodRows.length !== products.length) {
     console.error('x product inserts failed', prods.status, prods.text.slice(0, 400));

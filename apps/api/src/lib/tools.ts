@@ -176,16 +176,58 @@ function canonicalPhrase(s: string): string {
 }
 
 const STOPWORDS = new Set([
-  'yes', 'no', 'ok', 'okay', 'please', 'confirm', 'confirmed', 'order', 'kore', 'din', 'dorkar',
-  'lagbe', 'chai', 'nibo', 'nite', 'ekta', 'one', 'two', '1pc', 'pcs', 'piece', 'pc', 'pieces',
-  'size', 'the', 'and', 'for', 'want', 'need', 'buy', 'hobe', 'ache', 'kori', 'korte', 'ami',
-  'price', 'dam', 'taka', 'takar', 'moddhe', 'er', 'nam', 'address',
+  'yes',
+  'no',
+  'ok',
+  'okay',
+  'please',
+  'confirm',
+  'confirmed',
+  'order',
+  'kore',
+  'din',
+  'dorkar',
+  'lagbe',
+  'chai',
+  'nibo',
+  'nite',
+  'ekta',
+  'one',
+  'two',
+  '1pc',
+  'pcs',
+  'piece',
+  'pc',
+  'pieces',
+  'size',
+  'the',
+  'and',
+  'for',
+  'want',
+  'need',
+  'buy',
+  'hobe',
+  'ache',
+  'kori',
+  'korte',
+  'ami',
+  'price',
+  'dam',
+  'taka',
+  'takar',
+  'moddhe',
+  'er',
+  'nam',
+  'address',
 ]);
 
 /** Splits a free-text query into meaningful, synonym-normalized tokens. */
 function textTokens(q: string | undefined): string[] {
   if (!q) return [];
-  const raw = q.toLowerCase().split(/[^a-z0-9\u0980-\u09ff-]+/).filter(Boolean);
+  const raw = q
+    .toLowerCase()
+    .split(/[^a-z0-9\u0980-\u09ff-]+/)
+    .filter(Boolean);
   const tokens: string[] = [];
   for (const t of raw) {
     if (t.length < 3 || STOPWORDS.has(t)) continue;
@@ -294,7 +336,9 @@ async function searchProducts(ctx: AiToolContext, args: Record<string, unknown>)
           if (!(vColor.includes(colorNorm) || colorNorm.includes(vColor))) return false;
         }
         if (sizeNorm) {
-          const vSize = String(vr.size ?? '').toLowerCase().trim();
+          const vSize = String(vr.size ?? '')
+            .toLowerCase()
+            .trim();
           if (vSize && !(vSize.includes(sizeNorm) || sizeNorm.includes(vSize))) return false;
         }
         return true;
@@ -359,7 +403,8 @@ async function searchProducts(ctx: AiToolContext, args: Record<string, unknown>)
       })),
     })),
     note: publicProducts.length
-      ? note || 'Availability/size answers must come from the variants list above, never from guesses.'
+      ? note ||
+        'Availability/size answers must come from the variants list above, never from guesses.'
       : 'No products matched. Tell the customer honestly and suggest searching another keyword.',
   };
 }
@@ -466,7 +511,10 @@ async function rememberNegotiated(ctx: AiToolContext, productId: string, unitPri
 }
 
 /** Conversation-scoped negotiated prices for the given product ids. */
-async function loadNegotiated(ctx: AiToolContext, productIds: string[]): Promise<Record<string, number>> {
+async function loadNegotiated(
+  ctx: AiToolContext,
+  productIds: string[],
+): Promise<Record<string, number>> {
   if (!productIds.length) return {};
   const { data, error } = await ctx.db
     .from('negotiated_prices')
@@ -511,7 +559,10 @@ async function createOrder(ctx: AiToolContext, args: Record<string, unknown>) {
     return { error: 'Customer name, valid phone and address are required' };
 
   // Server-verified negotiated prices for this conversation (bargaining result).
-  const negotiated = await loadNegotiated(ctx, items.map((i) => i.productId));
+  const negotiated = await loadNegotiated(
+    ctx,
+    items.map((i) => i.productId),
+  );
 
   const result = await createOrderForShop({
     db: ctx.db,

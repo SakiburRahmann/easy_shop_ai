@@ -37,12 +37,18 @@ export async function ownedShop(c: Context<EnvShape>, shopId: string): Promise<S
   const { data, error } = await db.from('shops').select('*').eq('id', shopId).maybeSingle();
   if (error || !data) return notFound(c, 'Shop');
   const shop = toShop(data);
-  if (shop.ownerId !== authUser.id) return c.json({ error: 'You do not have access to this shop' }, 403);
+  if (shop.ownerId !== authUser.id)
+    return c.json({ error: 'You do not have access to this shop' }, 403);
   return shop;
 }
 
 export async function ownerShopIdOf(db: Db, userId: string): Promise<string | null> {
-  const { data, error } = await db.from('shops').select('id').eq('owner_id', userId).limit(1).maybeSingle();
+  const { data, error } = await db
+    .from('shops')
+    .select('id')
+    .eq('owner_id', userId)
+    .limit(1)
+    .maybeSingle();
   if (error || !data) return null;
   const r = data as Record<string, unknown>;
   return typeof r.id === 'string' ? r.id : null;

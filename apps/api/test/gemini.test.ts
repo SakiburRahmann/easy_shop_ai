@@ -68,10 +68,12 @@ describe('classifyFailure', () => {
   it('routes 401/403 to auth, 404 and "no longer available" 400s to model_not_found', () => {
     expect(classifyFailure(401, '').kind).toBe('auth');
     expect(classifyFailure(404, '').kind).toBe('model_not_found');
-    expect(classifyFailure(400, 'models/m is no longer available. Please update your code.').kind).toBe(
-      'model_not_found',
+    expect(
+      classifyFailure(400, 'models/m is no longer available. Please update your code.').kind,
+    ).toBe('model_not_found');
+    expect(classifyFailure(400, 'thinkingConfig is not supported for this model').kind).toBe(
+      'bad_request',
     );
-    expect(classifyFailure(400, 'thinkingConfig is not supported for this model').kind).toBe('bad_request');
   });
 
   it('routes 408/5xx to server', () => {
@@ -129,7 +131,9 @@ describe('ModelCircuits', () => {
 function sseResponse(events: Array<string | Record<string, unknown>>, status = 200): Response {
   const payload =
     events
-      .map((raw) => (typeof raw === 'string' ? raw : `data: ${JSON.stringify({ candidates: [raw] })}`))
+      .map((raw) =>
+        typeof raw === 'string' ? raw : `data: ${JSON.stringify({ candidates: [raw] })}`,
+      )
       .join('\n\n') + '\n\n';
   return new Response(payload, {
     status,
@@ -163,10 +167,16 @@ describe('streamGeminiRound rotation', () => {
       () => sseResponse(['{"error":{"code":429,"message":"Rate limit reached"}}'], 429),
       () => sseResponse([textChunk], 200),
     ]);
-    const result = await streamGeminiRound(chainBindings, { systemPrompt: 's', contents: [], tools: [] }, {}, f, circuits);
+    const result = await streamGeminiRound(
+      chainBindings,
+      { systemPrompt: 's', contents: [], tools: [] },
+      {},
+      f,
+      circuits,
+    );
     expect(result.error).toBeUndefined();
     expect(result.text).toBe('ok');
-    const served = urls.map((u) => (/models\/([^:]+):/.exec(u)?.[1] ?? 'unknown'));
+    const served = urls.map((u) => /models\/([^:]+):/.exec(u)?.[1] ?? 'unknown');
     expect(served).toEqual(['model-a', 'model-b', 'model-c']);
     expect(urls[0]).toContain('streamGenerateContent?alt=sse');
   });
@@ -177,11 +187,24 @@ describe('streamGeminiRound rotation', () => {
       () => sseResponse([], 200),
       () =>
         sseResponse(
-          [{ content: { role: 'model', parts: [{ functionCall: { name: 'search_products', args: { query: 'x' } } }] } }],
+          [
+            {
+              content: {
+                role: 'model',
+                parts: [{ functionCall: { name: 'search_products', args: { query: 'x' } } }],
+              },
+            },
+          ],
           200,
         ),
     ]);
-    const result = await streamGeminiRound(chainBindings, { systemPrompt: 's', contents: [], tools: [] }, {}, f, circuits);
+    const result = await streamGeminiRound(
+      chainBindings,
+      { systemPrompt: 's', contents: [], tools: [] },
+      {},
+      f,
+      circuits,
+    );
     expect(result.error).toBeUndefined();
     expect(result.toolCalls).toEqual([{ name: 'search_products', args: { query: 'x' } }]);
     expect(urls).toHaveLength(2);
@@ -202,12 +225,21 @@ describe('streamGeminiRound rotation', () => {
           setTimeout(() => controller.error(new Error('aborted')), 1);
         },
       });
-      return new Response(stream, { status: 200, headers: { 'content-type': 'text/event-stream' } });
+      return new Response(stream, {
+        status: 200,
+        headers: { 'content-type': 'text/event-stream' },
+      });
     };
     const fetchMock = vi.fn(async () => {
       return tokenThenThrow();
     }) as unknown as typeof fetch;
-    const result = await streamGeminiRound(chainBindings, { systemPrompt: 's', contents: [], tools: [] }, {}, fetchMock, circuits);
+    const result = await streamGeminiRound(
+      chainBindings,
+      { systemPrompt: 's', contents: [], tools: [] },
+      {},
+      fetchMock,
+      circuits,
+    );
     expect(calls).toBe(1);
     expect(result.error).toBeTruthy();
     expect(result.text).toBe('hél');
@@ -217,33 +249,68 @@ describe('streamGeminiRound rotation', () => {
     const circuits = new ModelCircuits();
     const { fetch: f, urls } = fakeFetchScript([
       () => sseResponse(['{"error":{"code":429,"message":"...per day limit exceeded..."}}'], 429),
-      () => sseResponse(['{"error":{"code":429,"message":"...quota_exceeded... per day..."}}'], 429),
+      () =>
+        sseResponse(['{"error":{"code":429,"message":"...quota_exceeded... per day..."}}'], 429),
       () => sseResponse(['{"error":{"code":429,"message":"...requests per day..."}}'], 429),
     ]);
-    const result = await streamGeminiRound(chainBindings, { systemPrompt: 's', contents: [], tools: [] }, {}, f, circuits);
-    expect(result.error).toBe('The AI assistant reached its daily capacity — please try again later.');
+    const result = await streamGeminiRound(
+      chainBindings,
+      { systemPrompt: 's', contents: [], tools: [] },
+      {},
+      f,
+      circuits,
+    );
+    expect(result.error).toBe(
+      'The AI assistant reached its daily capacity — please try again later.',
+    );
     expect(urls).toHaveLength(3);
   });
 
   it('skips cooled-down models entirely without contacting the provider', async () => {
     const circuits = new ModelCircuits();
-    circuits.recordFailure('model-a', { kind: 'rate_limit_daily', retryAfterMs: null, message: '' });
+    circuits.recordFailure('model-a', {
+      kind: 'rate_limit_daily',
+      retryAfterMs: null,
+      message: '',
+    });
     circuits.recordFailure('model-b', { kind: 'auth', retryAfterMs: null, message: '' });
-    circuits.recordFailure('model-c', { kind: 'rate_limit_daily', retryAfterMs: null, message: '' });
+    circuits.recordFailure('model-c', {
+      kind: 'rate_limit_daily',
+      retryAfterMs: null,
+      message: '',
+    });
     const fetchMock = vi.fn(async () => {
       throw new Error('must not be called');
     }) as unknown as typeof fetch;
-    const result = await streamGeminiRound(chainBindings, { systemPrompt: 's', contents: [], tools: [] }, {}, fetchMock, circuits);
-    expect(result.error).toBe('The AI assistant is cooling down — please try again in a few minutes.');
+    const result = await streamGeminiRound(
+      chainBindings,
+      { systemPrompt: 's', contents: [], tools: [] },
+      {},
+      fetchMock,
+      circuits,
+    );
+    expect(result.error).toBe(
+      'The AI assistant is cooling down — please try again in a few minutes.',
+    );
   });
 
   it('falls through a model-specific 400 to the next model', async () => {
     const circuits = new ModelCircuits();
     const { fetch: f, urls } = fakeFetchScript([
-      () => sseResponse(['{"error":{"code":400,"message":"tools are not supported for this model"}}'], 400),
+      () =>
+        sseResponse(
+          ['{"error":{"code":400,"message":"tools are not supported for this model"}}'],
+          400,
+        ),
       () => sseResponse([textChunk], 200),
     ]);
-    const result = await streamGeminiRound(chainBindings, { systemPrompt: 's', contents: [], tools: [] }, {}, f, circuits);
+    const result = await streamGeminiRound(
+      chainBindings,
+      { systemPrompt: 's', contents: [], tools: [] },
+      {},
+      f,
+      circuits,
+    );
     expect(result.error).toBeUndefined();
     expect(result.text).toBe('ok');
     expect(urls).toHaveLength(2);
