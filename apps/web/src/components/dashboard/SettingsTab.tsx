@@ -119,7 +119,7 @@ function ShopSettings({
         </Field>
         <Field label="Storefront URL">
           <input
-            value={`/s/${shop.slug}`}
+            value={`/s?shop=${shop.slug}`}
             readOnly
             className={`${inputClass} bg-zinc-50 text-zinc-500`}
           />

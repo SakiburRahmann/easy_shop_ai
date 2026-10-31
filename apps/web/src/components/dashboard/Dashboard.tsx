@@ -114,12 +114,12 @@ export default function Dashboard() {
           <div className="ml-auto flex items-center gap-2 text-sm">
             {shop ? (
               <a
-                href={`/s/${shop.slug}`}
+                href={`/s?shop=${shop.slug}`}
                 target="_blank"
                 rel="noopener"
                 className="text-emerald-600 hover:underline"
               >
-                /s/{shop.slug} ↗
+                /s?shop={shop.slug} ↗
               </a>
             ) : null}
             <Button variant="ghost" onClick={logout}>
@@ -278,7 +278,7 @@ function Onboarding({
             Signed in as {email}. A shop URL is generated from your name.
           </p>
         </div>
-        <Field label="Shop name" hint="e.g. Rahman Fashion → /s/rahman-fashion">
+        <Field label="Shop name" hint="e.g. Rahman Fashion → /s?shop=rahman-fashion">
           <input
             value={name}
             onChange={(e) => setName(e.target.value)}
