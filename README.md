@@ -2,10 +2,12 @@
 
 [![CI](https://github.com/SakiburRahmann/easy_shop_ai/actions/workflows/ci.yml/badge.svg)](https://github.com/SakiburRahmann/easy_shop_ai/actions/workflows/ci.yml)
 
-An AI storefront and sales assistant for small online sellers (CSE 327 project). Sellers sign up,
-pick a template and get a live storefront with an AI assistant that answers customers in Bangla,
-English or Banglish, searches the real catalog, bargains within seller-set floor prices, and
-collects cash-on-delivery orders. One account and one data source across web and mobile.
+An AI commerce platform for small online sellers (CSE 327 project). Sellers sign up, choose their
+business type, build a store with one of three templates and a custom theme, set delivery zones and
+get a live storefront with an AI assistant that answers customers in Bangla, English or Banglish,
+searches the real catalog, bargains within seller-set floor prices, and collects cash-on-delivery
+orders. Customers can browse shops, search products across the whole marketplace, fill a cart and
+check out several items in one COD order. One account and one data source across web and mobile.
 
 ## Architecture
 

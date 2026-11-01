@@ -8,6 +8,9 @@ import type { NextConfig } from 'next';
 const nextConfig: NextConfig = {
   output: 'export',
   images: { unoptimized: true },
+  // Local previews are served from 127.0.0.1 while Next binds localhost.
+  // This only affects `next dev`; the static export is unchanged.
+  allowedDevOrigins: ['127.0.0.1'],
   turbopack: {
     rules: {
       '*.css': {

@@ -1,4 +1,8 @@
-import { shopDirectoryItemSchema, type ShopDirectoryItem } from '@easyshop/shared';
+import {
+  businessTypeSchema,
+  shopDirectoryItemSchema,
+  type ShopDirectoryItem,
+} from '@easyshop/shared';
 
 /**
  * PostgREST `or=` value sanitization: `,`, `(`, `)`, `"` and among other
@@ -41,6 +45,7 @@ export function toDirectoryItems(
       id: r.id,
       name: r.name,
       slug: r.slug,
+      businessType: businessTypeSchema.safeParse(r.business_type).data ?? 'other',
       description: r.description ?? null,
       templateId: r.template_id === 'modern' ? 'modern' : 'classic',
       theme: r.theme ?? {},

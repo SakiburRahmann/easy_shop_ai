@@ -64,6 +64,7 @@ describe('toDirectoryItems', () => {
     );
     expect(Object.keys(item ?? {}).sort()).toEqual(
       [
+        'businessType',
         'contact',
         'description',
         'id',

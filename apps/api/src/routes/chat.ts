@@ -5,6 +5,7 @@ import { notFound, parseBody } from '../lib/validation';
 import { createDb } from '../lib/db';
 import { iso, num, str, strArr, strOrNull, toShop } from '../lib/serialize';
 import { buildSystemPrompt } from '../lib/system-prompt';
+import { createRateLimiter } from '../lib/rate-limit';
 import { streamGeminiRound, type GeminiContent, type GeminiRoundResult } from '../lib/gemini';
 import { executeTool, toolDeclarations } from '../lib/tools';
 import type { AiToolContext } from '../lib/tools';
@@ -13,6 +14,8 @@ export const chatRoutes = new Hono<EnvShape>();
 
 const MAX_TOOL_ROUNDS = 6;
 const MAX_MESSAGES_PER_CONVERSATION = 100;
+/** Per-shop ceiling protects one busy storefront from starving the others. */
+const shopChatLimiter = createRateLimiter(120);
 
 function sseChunk(event: ChatEvent): string {
   return `data: ${JSON.stringify(event)}\n\n`;
@@ -44,6 +47,10 @@ chatRoutes.post('/chat', async (c) => {
   if (shopError || !shopRow) return notFound(c, 'Shop');
   const shop = toShop(shopRow);
 
+  if (!shopChatLimiter.hit(`chat-shop:${shop.id}`)) {
+    return c.json({ error: 'This shop assistant is busy, please try again in a moment' }, 429);
+  }
+
   const { data: aiRow } = await db
     .from('ai_settings')
     .select('*')
@@ -62,17 +69,25 @@ chatRoutes.post('/chat', async (c) => {
     ),
   };
 
-  // --- resolve conversation (verify ownership when provided) ---
+  // --- resolve conversation (shop + visitor must both match) ---
   let conversationId = input.conversationId ?? '';
   const visitorId = input.visitorId ?? crypto.randomUUID();
   if (conversationId) {
-    const { data: convRow } = await db
-      .from('conversations')
-      .select('id, shop_id')
-      .eq('id', conversationId)
-      .eq('shop_id', shop.id)
-      .maybeSingle();
-    if (!convRow) conversationId = '';
+    // A conversation id without its visitor id cannot resume the thread; this
+    // prevents a leaked UUID from exposing someone else's history.
+    if (!input.visitorId) {
+      conversationId = '';
+    } else {
+      const { data: convRow } = await db
+        .from('conversations')
+        .select('id, shop_id, status, visitor_id')
+        .eq('id', conversationId)
+        .eq('shop_id', shop.id)
+        .eq('visitor_id', input.visitorId)
+        .maybeSingle();
+      const status = str((convRow as Record<string, unknown> | null)?.status, 'active');
+      if (!convRow || status === 'closed') conversationId = '';
+    }
   }
   if (!conversationId) {
     const { data: created, error: createError } = await db
@@ -93,23 +108,30 @@ chatRoutes.post('/chat', async (c) => {
     return c.json({ error: 'This conversation is full — please start a new chat' }, 429);
   }
 
-  // --- log the customer message, load recent history ---
-  await db
-    .from('messages')
-    .insert({ conversation_id: conversationId, role: 'customer', content: input.message });
+  // --- load recent history BEFORE logging the new message, so the current
+  // turn is not sent twice. `desc` + reverse keeps the newest 40 messages. ---
   const { data: historyRows } = await db
     .from('messages')
     .select('role, content')
     .eq('conversation_id', conversationId)
-    .order('created_at', { ascending: true })
+    .in('role', ['customer', 'assistant'])
+    .order('created_at', { ascending: false })
     .limit(40);
 
   const history: GeminiContent[] = ((historyRows ?? []) as Record<string, unknown>[])
-    .filter((m) => m.role === 'customer' || m.role === 'assistant')
+    .reverse()
     .map((m) => ({
       role: m.role === 'assistant' ? 'model' : 'user',
       parts: [{ text: str(m.content) }],
     }));
+
+  const { error: logError } = await db
+    .from('messages')
+    .insert({ conversation_id: conversationId, role: 'customer', content: input.message });
+  if (logError) {
+    console.error('[chat] customer message insert failed:', logError.message);
+    return c.json({ error: 'Could not start the conversation, please retry' }, 500);
+  }
 
   const contents: GeminiContent[] = [
     ...history,

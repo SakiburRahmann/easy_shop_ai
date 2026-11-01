@@ -1,5 +1,6 @@
 import { Hono } from 'hono';
 import {
+  BUSINESS_TYPE_PRESETS,
   aiSettingsSchema,
   aiSettingsUpdateInputSchema,
   categorySchema,
@@ -31,20 +32,22 @@ shopRoutes.get('/shops', async (c) => {
   const sp = c.req.query();
   const parsed = shopDirectoryQuerySchema.safeParse({
     q: sp.q?.trim()?.slice(0, 120) || undefined,
+    businessType: sp.businessType || undefined,
     limit: sp.limit ? Number(sp.limit) : undefined,
     offset: sp.offset ? Number(sp.offset) : undefined,
   });
   if (!parsed.success) {
     return c.json({ error: parsed.error.issues[0]?.message ?? 'Invalid query' }, 400);
   }
-  const { q, limit, offset } = parsed.data;
+  const { q, businessType, limit, offset } = parsed.data;
 
   const db = c.get('db');
   let query = db
     .from('shops')
-    .select('id, name, slug, description, template_id, theme, contact, created_at')
+    .select('id, name, slug, business_type, description, template_id, theme, contact, created_at')
     .order('created_at', { ascending: false })
     .range(offset, offset + limit - 1);
+  if (businessType) query = query.eq('business_type', businessType);
   if (q) {
     const safe = sanitizePostgrestIlike(q);
     query = safe.length > 0 ? query.or(`name.ilike.%${safe}%,description.ilike.%${safe}%`) : query;
@@ -83,14 +86,16 @@ shopRoutes.post('/shops', requireAuth, async (c) => {
   if (!slug)
     return c.json({ error: 'Could not allocate a shop slug, please pick another name' }, 409);
 
+  const businessType = input.businessType ?? 'fashion';
   const { data: shopRow, error: shopError } = await db
     .from('shops')
     .insert({
       owner_id: authUser.id,
       name: input.name,
       slug,
+      business_type: businessType,
       description: input.description ?? null,
-      template_id: input.templateId ?? 'classic',
+      template_id: input.templateId ?? BUSINESS_TYPE_PRESETS[businessType].suggestedTemplate,
       theme: input.theme ?? {},
       contact: input.contact ?? {},
       delivery_rules: input.deliveryRules ?? { zones: [] },
@@ -102,6 +107,19 @@ shopRoutes.post('/shops', requireAuth, async (c) => {
     return c.json({ error: shopError?.message ?? 'Shop creation failed' }, 500);
 
   const shop = toShop(shopRow);
+
+  // A store is useful from minute one: seed the category tree for the chosen
+  // business type, then initialize AI settings. Neither is allowed to undo a
+  // successfully created shop — the seller can fix both in the dashboard.
+  const { error: categoryError } = await db.from('categories').upsert(
+    BUSINESS_TYPE_PRESETS[businessType].categories.map((name) => ({
+      shop_id: shop.id,
+      name,
+    })),
+    { onConflict: 'shop_id,name', ignoreDuplicates: true },
+  );
+  if (categoryError) console.error('Failed to seed starter categories:', categoryError.message);
+
   await db
     .from('ai_settings')
     .upsert({ shop_id: shop.id }, { onConflict: 'shop_id', ignoreDuplicates: true });
@@ -124,12 +142,16 @@ shopRoutes.patch('/shops/:shopId', requireAuth, async (c) => {
     .from('shops')
     .update({
       ...(input.name !== undefined ? { name: input.name } : {}),
+      ...(input.businessType !== undefined ? { business_type: input.businessType } : {}),
       ...(input.description !== undefined ? { description: input.description } : {}),
       ...(input.templateId !== undefined ? { template_id: input.templateId } : {}),
       ...(input.theme !== undefined ? { theme: input.theme } : {}),
       ...(input.contact !== undefined ? { contact: input.contact } : {}),
       ...(input.deliveryRules !== undefined ? { delivery_rules: input.deliveryRules } : {}),
       ...(input.policies !== undefined ? { policies: input.policies } : {}),
+      ...(Object.prototype.hasOwnProperty.call(input, 'logoUrl')
+        ? { logo_url: input.logoUrl ?? null }
+        : {}),
     })
     .eq('id', shop.id)
     .select('*')

@@ -1,17 +1,20 @@
-import type {
-  AiSettings,
-  Category,
-  ChatProductCard,
-  Conversation,
-  Message,
-  Order,
-  OrderItemView,
-  OrderView,
-  Product,
-  ProductAdmin,
-  ProductPublic,
-  Shop,
-  Variant,
+import {
+  businessTypeSchema,
+  productAvailableStock,
+  templateIdSchema,
+  type AiSettings,
+  type Category,
+  type ChatProductCard,
+  type Conversation,
+  type Message,
+  type Order,
+  type OrderItemView,
+  type OrderView,
+  type Product,
+  type ProductAdmin,
+  type ProductPublic,
+  type Shop,
+  type Variant,
 } from '@easyshop/shared';
 
 /**
@@ -67,14 +70,17 @@ export function toShop(row: unknown): Shop {
         return { name: str(zz.name), charge: num(zz.charge), etaDays: num(zz.etaDays) };
       })
     : [];
+  const businessType = businessTypeSchema.safeParse(r.business_type);
+  const templateId = templateIdSchema.safeParse(r.template_id);
   return {
     id: str(r.id),
     ownerId: str(r.owner_id),
     name: str(r.name),
     slug: str(r.slug),
+    businessType: businessType.success ? businessType.data : 'other',
     description: strOrNull(r.description),
     logoUrl: strOrNull(r.logo_url),
-    templateId: (str(r.template_id, 'classic') as Shop['templateId']) || 'classic',
+    templateId: templateId.success ? templateId.data : 'classic',
     theme: obj(r.theme) as Shop['theme'],
     contact: {
       phone: strOrNull(contact.phone) ?? undefined,
@@ -121,6 +127,7 @@ export function toProduct(row: unknown): Product {
     description: strOrNull(r.description),
     price: num(r.price),
     floorPrice: num(r.floor_price),
+    stock: num(r.stock),
     images: strArr(r.images),
     active: r.active !== false,
     createdAt: iso(r.created_at),
@@ -233,6 +240,6 @@ export function cardFromProduct(p: ProductPublic): ChatProductCard {
     name: p.name,
     price: p.price,
     image: p.images[0] ?? null,
-    stock: p.variants.length ? p.variants.reduce((s, v) => s + v.stock, 0) : null,
+    stock: productAvailableStock(p),
   };
 }

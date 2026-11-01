@@ -1,46 +1,176 @@
 'use client';
 
 /**
- * Customer storefront: shop branding, catalog with search/filters, COD order
- * form, and the AI sales assistant chat. Product data rendered here ALWAYS
- * comes from API responses (storefront GET /s/:slug/products and chat `cards`
- * events) — never from model text.
+ * Customer storefront. Three templates share one catalog, one COD checkout and
+ * one AI sales agent; product data rendered here ALWAYS comes from API
+ * responses (storefront payload, product detail, chat `cards` events) — never
+ * from model text.
  */
+import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react';
 import Link from 'next/link';
-import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
 import {
+  createOrderInputSchema,
+  productAvailableStock,
+  productSoldOut,
+  publicProductDetailSchema,
+  storefrontSchema,
   type ChatEvent,
   type ChatProductCard,
   type ProductPublic,
-  type Storefront,
-  createOrderInputSchema,
-  productPublicSchema,
-  storefrontSchema,
+  type Shop,
+  type Storefront as StorefrontPayload,
 } from '@easyshop/shared';
 import { api, streamChat, taka, visitorId } from '@/lib/api';
-import { Badge, Button, ErrorNote, Field, Modal, Spinner, inputClass } from '@/components/ui';
+import { Icon } from '@/lib/icons';
+import {
+  Button,
+  CardSkeletonGrid,
+  ErrorNote,
+  Field,
+  Modal,
+  Skeleton,
+  inputClass,
+} from '@/components/ui';
+import { TEMPLATE_VISUALS, storefrontFont } from '@/components/storefront/templates';
 
-function slugFromPath(): string {
-  // Canonical storefront URL: /s?shop=<slug>. The pretty form /s/<slug>
-  // client-side is still parsed for future custom-domain deployments where
-  // the platform does not normalize deep paths.
-  const sp = new URLSearchParams(window.location.search);
-  const fromQuery = sp.get('shop');
-  if (fromQuery) return fromQuery;
+interface StoreRoute {
+  slug: string;
+  productId: string;
+}
+
+interface CartLine {
+  key: string;
+  product: ProductPublic;
+  variantId?: string;
+  qty: number;
+}
+
+const CART_PREFIX = 'easyshopai.cart.';
+
+function cartLineKey(productId: string, variantId?: string): string {
+  return `${productId}:${variantId ?? 'base'}`;
+}
+
+function variantOf(product: ProductPublic, variantId?: string) {
+  return variantId ? product.variants.find((variant) => variant.id === variantId) : undefined;
+}
+
+/** Units a single line may buy, from live variant/product stock. */
+function lineStock(product: ProductPublic, variantId?: string): number {
+  const variant = variantOf(product, variantId);
+  if (variant) return variant.stock;
+  return product.variants.length ? 0 : product.stock;
+}
+
+function lineUnitPrice(product: ProductPublic, variantId?: string): number {
+  return variantOf(product, variantId)?.priceOverride ?? product.price;
+}
+
+function readCart(slug: string): CartLine[] {
+  if (typeof window === 'undefined' || !slug) return [];
+  try {
+    const raw = window.localStorage.getItem(CART_PREFIX + slug);
+    if (!raw) return [];
+    const parsed: unknown = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return [];
+    return parsed.filter(
+      (line): line is CartLine =>
+        Boolean(line) &&
+        typeof line === 'object' &&
+        typeof (line as CartLine).key === 'string' &&
+        typeof (line as CartLine).qty === 'number' &&
+        Boolean((line as CartLine).product),
+    );
+  } catch {
+    return [];
+  }
+}
+
+/** Canonical URL is /s?shop=<slug>; /s/<slug> is parsed for deep links. */
+function routeFromLocation(): StoreRoute {
+  if (typeof window === 'undefined') return { slug: '', productId: '' };
+  const search = new URLSearchParams(window.location.search);
   const match = window.location.pathname.match(/^\/s\/([^/]+)\/?$/);
-  return match ? decodeURIComponent(match[1]) : '';
+  return {
+    slug: search.get('shop') ?? (match ? decodeURIComponent(match[1]) : ''),
+    productId: search.get('product') ?? '',
+  };
 }
 
 export default function Storefront() {
-  const [slug] = useState(() => (typeof window !== 'undefined' ? slugFromPath() : ''));
-  const [data, setData] = useState<Storefront | null>(null);
+  const [route] = useState<StoreRoute>(routeFromLocation);
+  const [data, setData] = useState<StorefrontPayload | null>(null);
   const [loading, setLoading] = useState(true);
   const [notFound, setNotFound] = useState(false);
+  const [buyTarget, setBuyTarget] = useState<ProductPublic | null>(null);
+  const [cart, setCart] = useState<CartLine[]>(() => readCart(route.slug));
+  const [cartOpen, setCartOpen] = useState(false);
+  const [notice, setNotice] = useState<string | null>(null);
 
   useEffect(() => {
-    const s = slugFromPath();
-    if (!s) {
-      // Async hop so no state updates run synchronously inside the effect.
+    if (!notice) return;
+    const timer = window.setTimeout(() => setNotice(null), 2600);
+    return () => window.clearTimeout(timer);
+  }, [notice]);
+
+  useEffect(() => {
+    if (!route.slug) return;
+    try {
+      window.localStorage.setItem(CART_PREFIX + route.slug, JSON.stringify(cart));
+    } catch {
+      /* storage may be unavailable; checkout still works */
+    }
+  }, [cart, route.slug]);
+
+  const addToCart = useCallback(
+    (product: ProductPublic, variantId: string | undefined, qty: number) => {
+      if (productSoldOut(product) || (product.variants.length > 0 && !variantId)) return false;
+      const key = cartLineKey(product.id, variantId);
+      const max = lineStock(product, variantId);
+      if (max <= 0) return false;
+      setCart((current) => {
+        const existing = current.find((line) => line.key === key);
+        if (existing) {
+          return current.map((line) =>
+            line.key === key ? { ...line, qty: Math.min(max, line.qty + qty) } : line,
+          );
+        }
+        return [
+          ...current,
+          { key, product, ...(variantId ? { variantId } : {}), qty: Math.min(max, qty) },
+        ];
+      });
+      setNotice(`${product.name} added to cart`);
+      return true;
+    },
+    [],
+  );
+
+  const setLineQty = useCallback((key: string, qty: number) => {
+    setCart((current) =>
+      current.flatMap((line) => {
+        if (line.key !== key) return [line];
+        const max = lineStock(line.product, line.variantId);
+        const next = Math.min(max, Math.max(0, qty));
+        return next <= 0 ? [] : [{ ...line, qty: next }];
+      }),
+    );
+  }, []);
+
+  const removeLine = useCallback((key: string) => {
+    setCart((current) => current.filter((line) => line.key !== key));
+  }, []);
+
+  const buyNow = (product: ProductPublic, variantId: string | undefined, qty: number) => {
+    if (!addToCart(product, variantId, qty)) return;
+    setBuyTarget(null);
+    setCartOpen(true);
+  };
+
+  const cartUnits = cart.reduce((sum, line) => sum + line.qty, 0);
+
+  useEffect(() => {
+    if (!route.slug) {
       void Promise.resolve().then(() => {
         setNotFound(true);
         setLoading(false);
@@ -48,7 +178,7 @@ export default function Storefront() {
       return;
     }
     let cancelled = false;
-    api<unknown>(`/s/${s}`)
+    api<unknown>(`/s/${route.slug}`)
       .then((raw) => {
         if (cancelled) return;
         const parsed = storefrontSchema.safeParse(raw);
@@ -60,70 +190,357 @@ export default function Storefront() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [route.slug]);
 
-  if (loading) return <Spinner label="Loading shop…" />;
+  const openBuy = useCallback(
+    async (productId: string) => {
+      try {
+        const parsed = publicProductDetailSchema.safeParse(
+          await api<unknown>(`/products/${productId}`),
+        );
+        if (!parsed.success || parsed.data.shop.slug !== route.slug) return;
+        setBuyTarget(parsed.data.product);
+      } catch {
+        /* product vanished; ignore */
+      }
+    },
+    [route.slug],
+  );
+
+  /** Marketplace deep links carry ?product=<id>; open it once data is ready. */
+  const openedInitial = useRef(false);
+  useEffect(() => {
+    if (!data || !route.productId || openedInitial.current) return;
+    openedInitial.current = true;
+    void openBuy(route.productId);
+  }, [data, route.productId, openBuy]);
+
+  const closeBuy = () => {
+    setBuyTarget(null);
+    if (typeof window !== 'undefined' && window.location.search.includes('product=')) {
+      const url = new URL(window.location.href);
+      url.searchParams.delete('product');
+      window.history.replaceState({}, '', url);
+    }
+  };
+
+  if (loading) {
+    return (
+      <div className="flex min-h-full flex-1 flex-col bg-[#f7f7f6]">
+        <Skeleton className="h-[76px] w-full rounded-none" />
+        <div className="mx-auto w-full max-w-5xl px-5 py-10">
+          <CardSkeletonGrid count={8} />
+        </div>
+      </div>
+    );
+  }
+
   if (notFound || !data) {
     return (
       <div className="flex flex-1 flex-col items-center justify-center gap-3 p-10 text-center">
-        <h1 className="text-xl font-semibold">Shop not found</h1>
+        <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-brand-50 text-brand-600">
+          <Icon.Store size={22} />
+        </div>
+        <h1 className="text-lg font-semibold">Shop not found</h1>
         <p className="text-sm text-zinc-500">No storefront lives at this address.</p>
-        <Link href="/" className="text-sm font-medium text-emerald-600 hover:underline">
-          ← EasyShopAI home
+        <Link
+          href="/"
+          className="flex items-center gap-1.5 text-sm font-medium text-brand-600 hover:underline"
+        >
+          <Icon.ArrowLeft size={14} />
+          Back to the marketplace
         </Link>
       </div>
     );
   }
 
-  const accent = data.shop.theme.primaryColor ?? '#059669';
+  const visuals = TEMPLATE_VISUALS[data.shop.templateId];
+  const primary = data.shop.theme.primaryColor ?? '#059669';
+  const accent = data.shop.theme.accentColor ?? '#F59E0B';
+  const font = storefrontFont(data.shop.theme.font ?? visuals.defaultFont);
 
   return (
-    <div className="flex min-h-full flex-1 flex-col bg-zinc-50">
-      <header
-        className="flex flex-wrap items-center gap-4 px-6 py-6 text-white"
-        style={{ backgroundColor: accent }}
-      >
-        <div className="mx-auto flex w-full max-w-5xl flex-wrap items-center gap-4">
-          <div className="flex flex-1 flex-col">
-            <h1 className="text-2xl font-bold">{data.shop.name}</h1>
-            {data.shop.description ? (
-              <p className="mt-1 max-w-xl text-sm text-white/80">{data.shop.description}</p>
+    <div className="flex min-h-full flex-1 flex-col" style={{ backgroundColor: visuals.surface }}>
+      <StorefrontHeader
+        data={data}
+        primary={primary}
+        accent={accent}
+        font={font}
+        centered={visuals.header === 'centered'}
+        cartUnits={cartUnits}
+        onCart={() => setCartOpen(true)}
+      />
+
+      {visuals.hero === 'gradient' ? (
+        <section
+          className="mx-auto mt-6 w-full max-w-5xl overflow-hidden rounded-3xl px-8 py-12 text-white shadow-lg"
+          style={{
+            background: `linear-gradient(125deg, ${primary} 0%, ${accent} 55%, #17181a 100%)`,
+          }}
+        >
+          <span className="inline-flex items-center gap-1.5 rounded-full bg-white/15 px-3 py-1 text-xs font-medium backdrop-blur">
+            <Icon.Spark size={12} /> {data.shop.name} · new collection
+          </span>
+          <h2 className="mt-4 max-w-xl text-3xl font-bold leading-snug tracking-tight">
+            {data.shop.description || 'Explore our latest collection — curated for you.'}
+          </h2>
+          <p className="mt-2 max-w-md text-sm text-white/75">
+            Ask the AI agent anything — prices, sizes, stock, delivery. Cash on delivery.
+          </p>
+        </section>
+      ) : null}
+
+      {visuals.hero === 'editorial' ? (
+        <section className="mx-auto mt-7 grid w-full max-w-5xl gap-6 px-5 sm:grid-cols-[1.15fr_0.85fr] sm:items-center">
+          <div>
+            <p
+              className="text-[11px] font-semibold uppercase tracking-[0.25em]"
+              style={{ color: primary }}
+            >
+              {data.shop.name}
+            </p>
+            <h2
+              className="mt-3 max-w-xl text-4xl font-semibold leading-[1.12] tracking-tight text-zinc-900"
+              style={{ fontFamily: font }}
+            >
+              {data.shop.description || 'Beautiful things, chosen with care.'}
+            </h2>
+            <p className="mt-3 max-w-md text-sm leading-relaxed text-zinc-500">
+              Browse the collection, or ask the AI agent to find something for you in বাংলা, English
+              or Banglish.
+            </p>
+            {data.categories.length ? (
+              <div className="mt-4 flex flex-wrap gap-1.5">
+                {data.categories.slice(0, 4).map((category) => (
+                  <span
+                    key={category.id}
+                    className="rounded-full border border-black/10 bg-white/70 px-3 py-1 text-[11px] font-medium text-zinc-600"
+                  >
+                    {category.name}
+                  </span>
+                ))}
+              </div>
             ) : null}
           </div>
-          {data.shop.contact.phone ? (
-            <div className="text-sm text-white/90">📞 {data.shop.contact.phone}</div>
-          ) : null}
-        </div>
-      </header>
+          <div
+            className="relative flex aspect-[4/3] items-center justify-center overflow-hidden rounded-[2rem]"
+            style={{
+              background: `radial-gradient(circle at 30% 25%, ${accent}55, transparent 60%), ${primary}1a`,
+              border: `1px solid ${primary}22`,
+            }}
+          >
+            <div
+              className="flex h-24 w-24 items-center justify-center rounded-full text-3xl font-semibold text-white shadow-xl"
+              style={{ backgroundColor: primary, fontFamily: font }}
+            >
+              {data.shop.name.slice(0, 1)}
+            </div>
+            <span className="absolute bottom-4 right-5 rounded-full bg-white/80 px-3 py-1 text-[10px] uppercase tracking-widest text-zinc-500 backdrop-blur">
+              Est. EasyShopAI
+            </span>
+          </div>
+        </section>
+      ) : null}
 
-      <Catalog data={data} slug={slug} accent={accent} />
+      <Catalog
+        data={data}
+        slug={route.slug}
+        visuals={visuals}
+        primary={primary}
+        accent={accent}
+        font={font}
+        onBuy={openBuy}
+      />
 
-      <footer className="border-t border-zinc-200 bg-white px-6 py-4 text-center text-xs text-zinc-500">
+      <footer className="mt-10 border-t border-black/5 px-5 py-7 text-center text-xs text-zinc-400">
         {data.shop.policies.notes ? (
-          <p className="mx-auto max-w-2xl whitespace-pre-line">{data.shop.policies.notes}</p>
+          <p className="mx-auto mb-2 max-w-2xl whitespace-pre-line text-zinc-500">
+            {data.shop.policies.notes}
+          </p>
         ) : null}
-        <p className="mt-1">{data.shop.name} · powered by EasyShopAI</p>
+        <p style={{ fontFamily: font }}>
+          {data.shop.name} · shop on{' '}
+          <Link href="/" className="font-medium text-brand-600 hover:underline">
+            EasyShopAI
+          </Link>
+        </p>
       </footer>
 
-      <ChatWidget shop={data} accent={accent} />
+      {buyTarget ? (
+        <ProductModal
+          key={buyTarget.id}
+          product={buyTarget}
+          onClose={closeBuy}
+          primary={primary}
+          font={font}
+          onAdd={addToCart}
+          onBuyNow={buyNow}
+        />
+      ) : null}
+
+      <CartDrawer
+        open={cartOpen}
+        onClose={() => setCartOpen(false)}
+        lines={cart}
+        shop={data.shop}
+        slug={route.slug}
+        primary={primary}
+        font={font}
+        onQty={setLineQty}
+        onRemove={removeLine}
+        onPlaced={() => setCart([])}
+      />
+
+      {notice ? (
+        <div className="pop-in fixed bottom-24 left-1/2 z-50 -translate-x-1/2 rounded-full bg-zinc-900 px-4 py-2 text-xs font-medium text-white shadow-xl">
+          {notice}
+        </div>
+      ) : null}
+
+      <ChatWidget
+        shop={data}
+        primary={primary}
+        accent={accent}
+        onSelectProduct={(id) => void openBuy(id)}
+      />
     </div>
   );
 }
-/* ─────────────────────────── catalog + orders ──────────────────────────── */
 
-interface BuyTarget {
-  product: ProductPublic;
+/* ─────────────────────────────── header ────────────────────────────────── */
+
+function StorefrontHeader({
+  data,
+  primary,
+  accent,
+  font,
+  centered,
+  cartUnits,
+  onCart,
+}: {
+  data: StorefrontPayload;
+  primary: string;
+  accent: string;
+  font?: string;
+  centered: boolean;
+  cartUnits: number;
+  onCart: () => void;
+}) {
+  if (centered) {
+    return (
+      <header className="sticky top-0 z-30 border-b border-black/5 bg-white/75 backdrop-blur">
+        <div className="h-1 w-full" style={{ backgroundColor: primary }} />
+        <div className="mx-auto flex w-full max-w-5xl flex-col items-center gap-1 px-5 py-4">
+          <Link href="/" className="text-[10px] uppercase tracking-[0.3em] text-zinc-400">
+            EasyShopAI
+          </Link>
+          <h1
+            className="text-center text-2xl font-semibold tracking-[0.08em] text-zinc-900"
+            style={{ fontFamily: font }}
+          >
+            {data.shop.name}
+          </h1>
+          <div className="flex flex-wrap items-center justify-center gap-3 text-[10px] uppercase tracking-widest text-zinc-400">
+            <span>Shop</span>
+            {data.shop.contact.phone ? <span>{data.shop.contact.phone}</span> : null}
+            {data.shop.policies.returnPolicy ? <span>Returns</span> : null}
+            <button
+              type="button"
+              onClick={onCart}
+              className="flex items-center gap-1 font-semibold tracking-widest transition hover:text-zinc-800"
+              style={{ color: primary }}
+            >
+              <Icon.Bag size={12} />
+              Cart{cartUnits ? ` (${cartUnits})` : ''}
+            </button>
+          </div>
+        </div>
+      </header>
+    );
+  }
+
+  return (
+    <header className="sticky top-0 z-30 text-white shadow-sm" style={{ backgroundColor: primary }}>
+      <div className="mx-auto flex w-full max-w-5xl flex-wrap items-center gap-4 px-5 py-4">
+        <div className="flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden rounded-2xl bg-white/15 text-lg font-bold backdrop-blur">
+          {data.shop.logoUrl ? (
+            <img src={data.shop.logoUrl} alt="" className="h-full w-full object-cover" />
+          ) : (
+            data.shop.name.slice(0, 1)
+          )}
+        </div>
+        <div className="flex min-w-0 flex-1 flex-col">
+          <h1 className="truncate text-lg font-bold leading-tight" style={{ fontFamily: font }}>
+            {data.shop.name}
+          </h1>
+          {data.shop.description ? (
+            <p className="line-clamp-1 text-[13px] text-white/80">{data.shop.description}</p>
+          ) : null}
+        </div>
+        <span
+          className="hidden items-center gap-1.5 rounded-full px-3 py-1.5 text-[11px] font-medium backdrop-blur sm:flex"
+          style={{ backgroundColor: `${accent}cc` }}
+        >
+          <Icon.Spark size={12} />
+          AI agent inside
+        </span>
+        {data.shop.contact.phone ? (
+          <span className="hidden items-center gap-1.5 rounded-full bg-white/15 px-3 py-1.5 text-[13px] font-medium backdrop-blur lg:flex">
+            <Icon.Phone size={13} />
+            {data.shop.contact.phone}
+          </span>
+        ) : null}
+        <button
+          type="button"
+          onClick={onCart}
+          aria-label={`Open cart (${cartUnits} items)`}
+          className="relative flex items-center gap-1.5 rounded-full bg-white/15 px-3 py-1.5 text-[13px] font-medium backdrop-blur transition hover:bg-white/25"
+        >
+          <Icon.Bag size={14} />
+          <span className="hidden sm:inline">Cart</span>
+          {cartUnits ? (
+            <span
+              className="flex h-5 min-w-5 items-center justify-center rounded-full px-1 text-[10px] font-bold"
+              style={{ backgroundColor: accent, color: '#17181a' }}
+            >
+              {cartUnits}
+            </span>
+          ) : null}
+        </button>
+      </div>
+    </header>
+  );
 }
-function Catalog({ data, slug, accent }: { data: Storefront; slug: string; accent: string }) {
-  const [products, setProducts] = useState<ProductPublic[]>(data.products);
+
+/* ─────────────────────────── catalog + orders ─────────────────────────── */
+
+type Filters = { q?: string; categoryId?: string; sort?: string };
+
+function Catalog({
+  data,
+  slug,
+  visuals,
+  primary,
+  accent,
+  font,
+  onBuy,
+}: {
+  data: StorefrontPayload;
+  slug: string;
+  visuals: (typeof TEMPLATE_VISUALS)[keyof typeof TEMPLATE_VISUALS];
+  primary: string;
+  accent: string;
+  font?: string;
+  onBuy: (productId: string) => void;
+}) {
+  const [products, setProducts] = useState<ProductPublic[] | null>(data.products);
   const [q, setQ] = useState('');
   const [sort, setSort] = useState('newest');
   const [categoryId, setCategoryId] = useState<string | undefined>(undefined);
   const [loading, setLoading] = useState(false);
-  const [buyTarget, setBuyTarget] = useState<BuyTarget | null>(null);
 
   const refetch = useCallback(
-    (next?: { q?: string; categoryId?: string; sort?: string }) => {
+    (next?: Filters) => {
       setLoading(true);
       const sp = new URLSearchParams({ limit: '24' });
       if (next?.q) sp.set('q', next.q);
@@ -139,116 +556,154 @@ function Catalog({ data, slug, accent }: { data: Storefront; slug: string; accen
     [slug],
   );
 
-  const openBuy = async (productId: string) => {
-    try {
-      const parsed = productPublicSchema.safeParse(await api<unknown>(`/products/${productId}`));
-      if (parsed.success) setBuyTarget({ product: parsed.data });
-    } catch {
-      /* item vanished; ignore */
-    }
-  };
-
-  const modern = data.shop.templateId === 'modern';
-
   return (
-    <main className="mx-auto w-full max-w-5xl flex-1 px-4 py-8">
-      {modern ? (
-        <section
-          className="mb-8 flex flex-col gap-4 rounded-3xl px-8 py-10 text-white"
-          style={{ background: `linear-gradient(120deg, ${accent}, ${accent}99 70%, #0f172acc)` }}
-        >
-          <span className="w-fit rounded-full bg-white/20 px-3 py-1 text-xs font-medium backdrop-blur">
-            {data.shop.name} · new drops weekly
-          </span>
-          <p className="max-w-lg text-xl font-semibold leading-snug">
-            {data.shop.description || 'Explore our latest collection — curated for you.'}
-          </p>
-          <p className="text-sm text-white/75">
-            Need help choosing? The AI assistant (💬 bottom-right) knows every item, size and price.
-          </p>
-        </section>
-      ) : null}
-
-      <div className="mb-6 flex flex-wrap items-center gap-2">
-        <input
-          value={q}
-          onChange={(e) => setQ(e.target.value)}
-          onKeyDown={(e) => e.key === 'Enter' && refetch({ q, sort, categoryId })}
-          placeholder="Search products…"
-          className={`${inputClass} max-w-xs`}
-        />
-        <select
-          value={sort}
-          onChange={(e) => {
-            setSort(e.target.value);
-            refetch({ q, sort: e.target.value, categoryId });
-          }}
-          className={`${inputClass} w-auto`}
-        >
-          <option value="newest">Newest</option>
-          <option value="price_asc">Price ↑</option>
-          <option value="price_desc">Price ↓</option>
-        </select>
-        {data.categories.map((c) => (
+    <main className="mx-auto w-full max-w-5xl flex-1 px-5 py-8">
+      <div
+        className={`mb-7 flex flex-wrap items-center gap-2.5 ${
+          visuals.header === 'centered' ? 'justify-center' : ''
+        }`}
+      >
+        <div className="relative">
+          <Icon.Search
+            size={16}
+            className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-zinc-400"
+          />
+          <input
+            value={q}
+            onChange={(e) => setQ(e.target.value)}
+            onKeyDown={(e) => e.key === 'Enter' && refetch({ q, sort, categoryId })}
+            placeholder="Search this store…"
+            className={`${inputClass} w-64 pl-9`}
+          />
+        </div>
+        <div className="relative">
+          <select
+            value={sort}
+            onChange={(e) => {
+              setSort(e.target.value);
+              refetch({ q, sort: e.target.value, categoryId });
+            }}
+            className={`${inputClass} w-auto appearance-none pr-9`}
+            aria-label="Sort products"
+          >
+            <option value="newest">Newest</option>
+            <option value="price_asc">Price ↑</option>
+            <option value="price_desc">Price ↓</option>
+          </select>
+          <Icon.Chevron
+            size={14}
+            className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-zinc-400"
+          />
+        </div>
+        <div className="mx-1 hidden h-6 w-px bg-zinc-200 sm:block" />
+        {data.categories.map((category) => (
           <button
-            key={c.id}
-            style={categoryId === c.id ? { backgroundColor: accent, color: 'white' } : undefined}
-            className={`rounded-full border px-3 py-1.5 text-sm transition ${
-              categoryId === c.id
-                ? 'border-transparent'
-                : 'border-zinc-300 bg-white hover:bg-zinc-100'
+            key={category.id}
+            style={
+              categoryId === category.id
+                ? { backgroundColor: primary, color: 'white', borderColor: primary }
+                : undefined
+            }
+            className={`rounded-full border px-3.5 py-1.5 text-[13px] font-medium transition ${
+              categoryId === category.id
+                ? 'shadow-sm'
+                : 'border-black/10 bg-white/70 text-zinc-600 hover:border-zinc-300 hover:text-zinc-900'
             }`}
             onClick={() => {
-              const next = categoryId === c.id ? undefined : c.id;
+              const next = categoryId === category.id ? undefined : category.id;
               setCategoryId(next);
               refetch({ q, sort, categoryId: next });
             }}
           >
-            {c.name}
+            {category.name}
           </button>
         ))}
       </div>
 
       {loading ? (
-        <Spinner />
-      ) : products.length === 0 ? (
-        <p className="py-16 text-center text-sm text-zinc-500">
-          No products found. Ask the assistant in chat!
-        </p>
+        <CardSkeletonGrid />
+      ) : !products?.length ? (
+        <div className="flex flex-col items-center gap-2 rounded-3xl border border-dashed border-zinc-300 bg-white/70 p-16 text-center">
+          <div
+            className="flex h-11 w-11 items-center justify-center rounded-2xl text-white"
+            style={{ backgroundColor: primary }}
+          >
+            <Icon.Package size={20} />
+          </div>
+          <p className="text-sm font-semibold text-zinc-700">No products found</p>
+          <p className="max-w-xs text-xs text-zinc-500">
+            Ask the AI assistant in chat — it knows the full catalog.
+          </p>
+        </div>
       ) : (
-        <div
-          className={
-            modern
-              ? 'grid grid-cols-2 gap-5 sm:grid-cols-3 lg:grid-cols-4'
-              : 'grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4'
-          }
-        >
-          {products.map((p) => (
+        <div className={`grid ${visuals.grid}`}>
+          {products.map((product) => (
             <button
-              key={p.id}
-              onClick={() => openBuy(p.id)}
-              className={`group flex flex-col rounded-2xl border border-zinc-200 bg-white text-left shadow-sm transition hover:-translate-y-0.5 ${
-                modern ? 'overflow-hidden hover:shadow-lg' : 'hover:shadow-md'
-              }`}
+              key={product.id}
+              onClick={() => onBuy(product.id)}
+              className="group text-left"
+              aria-label={`View ${product.name}`}
             >
               <div
-                className={`${modern ? 'aspect-[3/4]' : 'aspect-square'} w-full overflow-hidden bg-zinc-100`}
+                className={`relative w-full overflow-hidden ${visuals.cardAspect} ${
+                  visuals.card === 'plain'
+                    ? 'rounded-2xl bg-zinc-100 shadow-sm'
+                    : 'rounded-xl bg-zinc-100 shadow-md shadow-zinc-900/[0.05]'
+                }`}
               >
-                {p.images[0] ? (
-                  <img src={p.images[0]} alt={p.name} className="h-full w-full object-cover" />
+                {product.images[0] ? (
+                  <img
+                    src={product.images[0]}
+                    alt={product.name}
+                    loading="lazy"
+                    className="h-full w-full object-cover transition duration-500 group-hover:scale-[1.04]"
+                  />
                 ) : (
-                  <div className="flex h-full w-full items-center justify-center text-3xl text-zinc-300">
-                    🛍️
+                  <div
+                    className="flex h-full w-full items-center justify-center"
+                    style={{ color: `${primary}55` }}
+                  >
+                    <Icon.Package size={28} />
                   </div>
                 )}
-              </div>
-              <div className="flex flex-1 flex-col gap-1 p-3">
-                <span className="line-clamp-2 text-sm font-medium">{p.name}</span>
-                <span className="font-semibold" style={{ color: accent }}>
-                  {taka(p.price)}
+                {visuals.card === 'editorial' ? (
+                  <div
+                    className="pointer-events-none absolute inset-x-0 bottom-0 h-16 opacity-0 transition group-hover:opacity-100"
+                    style={{ background: `linear-gradient(to top, ${primary}d9, transparent)` }}
+                  />
+                ) : null}
+                <span
+                  className="absolute left-2 top-2 rounded-full bg-white/85 px-2 py-0.5 text-[10px] font-semibold shadow-sm backdrop-blur"
+                  style={{ color: primary }}
+                >
+                  {taka(product.price)}
                 </span>
-                <span className="text-xs text-zinc-400">
-                  {p.variants.reduce((s, v) => s + v.stock, 0)} in stock
+                {productSoldOut(product) ? (
+                  <span className="absolute inset-x-0 bottom-0 bg-zinc-900/75 py-1.5 text-center text-[10px] font-semibold uppercase tracking-wide text-white">
+                    Sold out
+                  </span>
+                ) : null}
+              </div>
+              <div className="flex flex-col gap-0.5 px-0.5 pt-3">
+                <span
+                  className={`line-clamp-2 font-medium text-zinc-800 ${
+                    visuals.card === 'editorial' ? 'text-[13px] leading-snug' : 'text-[13px]'
+                  }`}
+                  style={{ fontFamily: font }}
+                >
+                  {product.name}
+                </span>
+                <span className="flex items-baseline gap-2">
+                  <span className="text-[15px] font-bold" style={{ color: primary }}>
+                    {taka(product.price)}
+                  </span>
+                  {productSoldOut(product) ? (
+                    <span className="text-[11px] font-medium text-red-500">Out of stock</span>
+                  ) : productAvailableStock(product) <= 5 ? (
+                    <span className="text-[11px] text-amber-600">
+                      Only {productAvailableStock(product)} left
+                    </span>
+                  ) : null}
                 </span>
               </div>
             </button>
@@ -256,50 +711,254 @@ function Catalog({ data, slug, accent }: { data: Storefront; slug: string; accen
         </div>
       )}
 
-      {buyTarget ? (
-        <OrderModal
-          key={buyTarget.product.id}
-          product={buyTarget.product}
-          onClose={() => setBuyTarget(null)}
-          slug={slug}
-          accent={accent}
-        />
+      {!data.products.length ? (
+        <p className="mt-6 text-center text-xs text-zinc-400">
+          This shop has not published products yet. The AI agent can still answer questions.
+        </p>
       ) : null}
+
+      <div
+        className="mt-10 flex flex-wrap items-center justify-center gap-2 rounded-2xl border border-black/5 bg-white/60 px-5 py-4 text-center text-[11px] text-zinc-500"
+        style={{ borderColor: `${accent}33` }}
+      >
+        <Icon.Truck size={14} style={{ color: primary }} />
+        {data.shop.deliveryRules.zones.length
+          ? data.shop.deliveryRules.zones
+              .map((zone) => `${zone.name} ৳${zone.charge} · ${zone.etaDays}d`)
+              .join('  ·  ')
+          : 'Delivery charge confirmed by the shop on the phone.'}
+        <span className="mx-2 hidden h-3 w-px bg-zinc-300 sm:block" />
+        <Icon.Shield size={14} style={{ color: primary }} />
+        Cash on delivery
+      </div>
     </main>
   );
 }
 
-function OrderModal({
+function ProductModal({
   product,
   onClose,
-  slug,
-  accent,
+  primary,
+  font,
+  onAdd,
+  onBuyNow,
 }: {
   product: ProductPublic;
   onClose: () => void;
-  slug: string;
-  accent: string;
+  primary: string;
+  font?: string;
+  onAdd: (product: ProductPublic, variantId: string | undefined, qty: number) => boolean;
+  onBuyNow: (product: ProductPublic, variantId: string | undefined, qty: number) => void;
 }) {
   const [qty, setQty] = useState(1);
   const [variantId, setVariantId] = useState<string | undefined>(undefined);
+  const chosen = variantOf(product, variantId);
+  const needsVariant = product.variants.length > 0;
+  const soldOut = productSoldOut(product);
+  const totalAvailable = productAvailableStock(product);
+  const max = needsVariant ? (chosen?.stock ?? 0) : product.stock;
+  const unit = chosen?.priceOverride ?? product.price;
+  const canBuy = !soldOut && (!needsVariant || Boolean(chosen)) && max > 0;
+
+  return (
+    <Modal open onClose={onClose} title={product.name} wide>
+      <div className="grid gap-5 sm:grid-cols-[200px_1fr]">
+        <div className="flex flex-col gap-2">
+          <div className="aspect-square w-full overflow-hidden rounded-2xl bg-zinc-100">
+            {product.images[0] ? (
+              <img
+                src={product.images[0]}
+                alt={product.name}
+                className="h-full w-full object-cover"
+              />
+            ) : (
+              <div className="flex h-full w-full items-center justify-center text-zinc-300">
+                <Icon.Package size={26} />
+              </div>
+            )}
+          </div>
+          <div className="flex flex-col gap-0.5">
+            <span className="text-sm font-semibold leading-snug" style={{ fontFamily: font }}>
+              {product.name}
+            </span>
+            <span className="text-sm font-bold" style={{ color: primary }}>
+              {taka(unit)}
+            </span>
+            {soldOut ? (
+              <span className="text-xs font-medium text-red-500">Sold out</span>
+            ) : (
+              <span className="text-[11px] text-zinc-400">
+                {needsVariant && !chosen ? totalAvailable : max} available
+              </span>
+            )}
+          </div>
+          <p className="flex items-center gap-1.5 text-xs text-brand-700">
+            <Icon.Truck size={13} /> Cash on delivery
+          </p>
+        </div>
+
+        <div className="flex flex-col gap-3.5">
+          {product.description ? (
+            <p className="whitespace-pre-line text-[13px] leading-relaxed text-zinc-500">
+              {product.description}
+            </p>
+          ) : null}
+
+          {needsVariant ? (
+            <div className="flex flex-col gap-1.5">
+              <span className="text-[13px] font-medium text-zinc-700">Size / color</span>
+              <div className="flex flex-wrap gap-1.5">
+                {product.variants.map((variant) => {
+                  const label = [variant.size, variant.color].filter(Boolean).join(' · ') || '—';
+                  const disabled = variant.stock <= 0;
+                  return (
+                    <button
+                      key={variant.id}
+                      type="button"
+                      disabled={disabled}
+                      onClick={() => {
+                        setVariantId(variant.id);
+                        setQty(1);
+                      }}
+                      className={`rounded-xl border px-3 py-1.5 text-xs font-medium transition ${
+                        variantId === variant.id
+                          ? 'text-white shadow-sm'
+                          : 'border-zinc-200 bg-white text-zinc-600 hover:border-zinc-300'
+                      } ${disabled ? 'cursor-not-allowed line-through opacity-40' : ''}`}
+                      style={
+                        variantId === variant.id
+                          ? { backgroundColor: primary, borderColor: primary }
+                          : undefined
+                      }
+                    >
+                      {label} · {taka(variant.priceOverride ?? product.price)}
+                    </button>
+                  );
+                })}
+              </div>
+              {!variantId ? (
+                <span className="text-[11px] text-zinc-400">Choose an option to continue.</span>
+              ) : null}
+            </div>
+          ) : null}
+
+          <div className="flex items-center gap-3">
+            <span className="text-[13px] font-medium text-zinc-700">Quantity</span>
+            <div className="flex items-center gap-1 rounded-xl border border-zinc-200 bg-white p-1 shadow-sm">
+              <button
+                type="button"
+                aria-label="Decrease quantity"
+                onClick={() => setQty((n) => Math.max(1, n - 1))}
+                className="flex h-7 w-7 items-center justify-center rounded-lg text-zinc-500 transition hover:bg-zinc-100 disabled:opacity-40"
+                disabled={qty <= 1}
+              >
+                <Icon.Minus size={14} />
+              </button>
+              <span className="w-7 text-center text-sm font-semibold">{qty}</span>
+              <button
+                type="button"
+                aria-label="Increase quantity"
+                onClick={() => setQty((n) => Math.min(Math.max(1, max), n + 1))}
+                className="flex h-7 w-7 items-center justify-center rounded-lg text-zinc-500 transition hover:bg-zinc-100 disabled:opacity-40"
+                disabled={qty >= max}
+              >
+                <Icon.Plus size={14} />
+              </button>
+            </div>
+          </div>
+
+          <div className="mt-1 flex flex-col gap-2">
+            <div className="flex flex-col gap-2 sm:flex-row">
+              <Button
+                variant="soft"
+                size="lg"
+                className="flex-1"
+                disabled={!canBuy}
+                onClick={() => {
+                  if (onAdd(product, variantId, qty)) onClose();
+                }}
+                icon={<Icon.Bag size={16} />}
+              >
+                Add to cart
+              </Button>
+              <Button
+                size="lg"
+                className="flex-1"
+                disabled={!canBuy}
+                onClick={() => onBuyNow(product, variantId, qty)}
+              >
+                {soldOut ? 'Sold out' : 'Buy now'}
+              </Button>
+            </div>
+            <span className="text-center text-[10px] text-zinc-400">
+              No online payment — pay cash when it arrives.
+            </span>
+          </div>
+        </div>
+      </div>
+    </Modal>
+  );
+}
+
+function CartDrawer({
+  open,
+  onClose,
+  lines,
+  shop,
+  slug,
+  primary,
+  font,
+  onQty,
+  onRemove,
+  onPlaced,
+}: {
+  open: boolean;
+  onClose: () => void;
+  lines: CartLine[];
+  shop: Shop;
+  slug: string;
+  primary: string;
+  font?: string;
+  onQty: (key: string, qty: number) => void;
+  onRemove: (key: string) => void;
+  onPlaced: () => void;
+}) {
+  const zones = shop.deliveryRules.zones;
   const [name, setName] = useState('');
   const [phone, setPhone] = useState('');
   const [address, setAddress] = useState('');
   const [note, setNote] = useState('');
+  const [zoneName, setZoneName] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [done, setDone] = useState(false);
+  const [placed, setPlaced] = useState<{ total: number; count: number; phone: string } | null>(
+    null,
+  );
 
-  const unit = useMemo(() => {
-    const v = product.variants.find((x) => x.id === variantId);
-    return v?.priceOverride ?? product.price;
-  }, [product, variantId]);
+  if (!open) return null;
 
-  const submit = async (e: FormEvent) => {
-    e.preventDefault();
+  const subtotal = lines.reduce(
+    (sum, line) => sum + lineUnitPrice(line.product, line.variantId) * line.qty,
+    0,
+  );
+  const deliveryCharge = zones.find((zone) => zone.name === zoneName)?.charge ?? 0;
+  const total = subtotal + deliveryCharge;
+
+  const submit = async (event: FormEvent) => {
+    event.preventDefault();
+    if (zones.length > 0 && !zoneName) {
+      setError('Please choose your delivery area');
+      return;
+    }
+    if (!lines.length) return;
     const input = createOrderInputSchema.safeParse({
-      items: [{ productId: product.id, ...(variantId ? { variantId } : {}), qty }],
+      items: lines.map((line) => ({
+        productId: line.product.id,
+        ...(line.variantId ? { variantId: line.variantId } : {}),
+        qty: line.qty,
+      })),
       customer: { name, phone, address },
+      ...(zoneName ? { deliveryZone: zoneName } : {}),
       ...(note ? { note } : {}),
     });
     if (!input.success) {
@@ -310,7 +969,8 @@ function OrderModal({
     setError(null);
     try {
       await api<unknown>(`/s/${slug}/orders`, { body: input.data });
-      setDone(true);
+      setPlaced({ total, count: lines.reduce((sum, line) => sum + line.qty, 0), phone });
+      onPlaced();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Order failed');
     } finally {
@@ -318,113 +978,245 @@ function OrderModal({
     }
   };
 
-  const total = unit * qty;
   return (
-    <Modal open onClose={onClose} title={done ? 'Order placed 🎉' : 'Order details'}>
-      {done ? (
-        <div className="flex flex-col gap-4 text-sm">
-          <p>
-            ধন্যবাদ! Your cash-on-delivery order is placed. The shop will call you on{' '}
-            <span className="font-medium">{phone}</span> to confirm.
-          </p>
-          <Button onClick={onClose}>Done</Button>
-        </div>
-      ) : (
-        <form onSubmit={submit} className="flex flex-col gap-3">
-          <div className="flex items-center gap-3 rounded-xl bg-zinc-50 p-3">
-            {product.images[0] ? (
-              <img
-                src={product.images[0]}
-                alt={product.name}
-                className="h-14 w-14 rounded-lg object-cover"
-              />
-            ) : null}
-            <div>
-              <div className="text-sm font-medium">{product.name}</div>
-              <div className="text-sm" style={{ color: accent }}>
-                {taka(unit)} × {qty} = <span className="font-semibold">{taka(total)}</span>
-              </div>
-            </div>
+    <>
+      <div
+        className="fixed inset-0 z-50 bg-zinc-900/35 backdrop-blur-[2px]"
+        onClick={onClose}
+        aria-hidden="true"
+      />
+      <aside
+        className="pop-in fixed right-0 top-0 z-50 flex h-full w-full max-w-md flex-col bg-white shadow-2xl"
+        role="dialog"
+        aria-label="Shopping cart"
+      >
+        <div
+          className="flex items-center justify-between px-5 py-4 text-white"
+          style={{ backgroundColor: primary }}
+        >
+          <div>
+            <h3 className="text-base font-semibold" style={{ fontFamily: font }}>
+              Your cart
+            </h3>
+            <p className="text-[11px] text-white/75">
+              {lines.reduce((sum, line) => sum + line.qty, 0)} item
+              {lines.reduce((sum, line) => sum + line.qty, 0) === 1 ? '' : 's'} · cash on delivery
+            </p>
           </div>
+          <button
+            onClick={onClose}
+            aria-label="Close cart"
+            className="rounded-full p-1.5 text-white/85 transition hover:bg-white/15"
+          >
+            <Icon.X size={18} />
+          </button>
+        </div>
 
-          {product.variants.filter((v) => v.stock > 0).length > 0 ? (
-            <Field label="Size / color">
-              <select
-                value={variantId ?? ''}
-                onChange={(e) => setVariantId(e.target.value || undefined)}
-                className={inputClass}
-              >
-                <option value="">Choose…</option>
-                {product.variants
-                  .filter((v) => v.stock > 0)
-                  .map((v) => (
-                    <option key={v.id} value={v.id}>
-                      {[v.size, v.color].filter(Boolean).join(' · ')} —{' '}
-                      {taka(v.priceOverride ?? product.price)} ({v.stock} left)
-                    </option>
-                  ))}
-              </select>
-            </Field>
-          ) : null}
-
-          <Field label="Quantity">
-            <input
-              type="number"
-              min={1}
-              max={20}
-              value={qty}
-              onChange={(e) => setQty(Math.max(1, Math.min(20, Number(e.target.value) || 1)))}
-              className={inputClass}
-            />
-          </Field>
-          <Field label="Your name">
-            <input
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              className={inputClass}
-              required
-            />
-          </Field>
-          <Field label="Phone">
-            <input
-              value={phone}
-              onChange={(e) => setPhone(e.target.value)}
-              placeholder="01XXXXXXXXX"
-              className={inputClass}
-              required
-            />
-          </Field>
-          <Field label="Address">
-            <textarea
-              value={address}
-              onChange={(e) => setAddress(e.target.value)}
-              rows={2}
-              className={inputClass}
-              required
-              minLength={5}
-            />
-          </Field>
-          <Field label="Note (optional)">
-            <input
-              value={note}
-              onChange={(e) => setNote(e.target.value)}
-              className={inputClass}
-              maxLength={500}
-            />
-          </Field>
-          <ErrorNote message={error} />
-          <div className="flex items-center justify-between">
-            <Badge tone="green">Cash on delivery</Badge>
-            <Button type="submit" disabled={busy}>
-              {busy ? 'Placing…' : `Place COD order · ${taka(total)}`}
+        {placed ? (
+          <div className="flex flex-1 flex-col items-center justify-center gap-3 px-6 py-8 text-center">
+            <div
+              className="flex h-14 w-14 items-center justify-center rounded-full text-white"
+              style={{ backgroundColor: primary }}
+            >
+              <Icon.Check size={26} />
+            </div>
+            <h4 className="text-base font-semibold" style={{ fontFamily: font }}>
+              ধন্যবাদ! Order placed
+            </h4>
+            <p className="max-w-xs text-sm text-zinc-500">
+              {placed.count} item{placed.count === 1 ? '' : 's'} · total{' '}
+              <span className="font-semibold text-zinc-800">{taka(placed.total)}</span>. The shop
+              will call you on <span className="font-medium text-zinc-800">{placed.phone}</span> to
+              confirm.
+            </p>
+            <Button variant="ghost" onClick={onClose} className="mt-2">
+              Keep shopping
             </Button>
           </div>
-        </form>
-      )}
-    </Modal>
+        ) : lines.length === 0 ? (
+          <div className="flex flex-1 flex-col items-center justify-center gap-3 px-6 py-8 text-center">
+            <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-zinc-100 text-zinc-400">
+              <Icon.Bag size={22} />
+            </div>
+            <p className="text-sm font-semibold text-zinc-700">Your cart is empty</p>
+            <p className="max-w-xs text-xs text-zinc-500">
+              Add a product from the catalog, or ask the AI agent to find what you need.
+            </p>
+            <Button variant="ghost" onClick={onClose}>
+              Browse products
+            </Button>
+          </div>
+        ) : (
+          <form onSubmit={submit} className="flex flex-1 flex-col overflow-y-auto">
+            <ul className="flex flex-col gap-3 px-4 py-4">
+              {lines.map((line) => {
+                const max = lineStock(line.product, line.variantId);
+                const variant = variantOf(line.product, line.variantId);
+                return (
+                  <li
+                    key={line.key}
+                    className="flex gap-3 rounded-2xl border border-zinc-200 p-2.5"
+                  >
+                    <div className="h-16 w-16 shrink-0 overflow-hidden rounded-xl bg-zinc-100">
+                      {line.product.images[0] ? (
+                        <img
+                          src={line.product.images[0]}
+                          alt=""
+                          className="h-full w-full object-cover"
+                        />
+                      ) : (
+                        <div className="flex h-full w-full items-center justify-center text-zinc-300">
+                          <Icon.Package size={18} />
+                        </div>
+                      )}
+                    </div>
+                    <div className="flex min-w-0 flex-1 flex-col gap-1">
+                      <span className="line-clamp-2 text-[13px] font-medium leading-snug text-zinc-800">
+                        {line.product.name}
+                      </span>
+                      <span className="text-[11px] text-zinc-400">
+                        {[variant?.size, variant?.color].filter(Boolean).join(' · ') || 'Standard'}
+                      </span>
+                      <div className="flex items-center justify-between gap-2">
+                        <div className="flex items-center gap-1 rounded-lg border border-zinc-200 p-0.5">
+                          <button
+                            type="button"
+                            aria-label="Decrease cart quantity"
+                            onClick={() => onQty(line.key, line.qty - 1)}
+                            className="flex h-6 w-6 items-center justify-center rounded-md text-zinc-500 hover:bg-zinc-100"
+                          >
+                            <Icon.Minus size={12} />
+                          </button>
+                          <span className="w-6 text-center text-xs font-semibold">{line.qty}</span>
+                          <button
+                            type="button"
+                            aria-label="Increase cart quantity"
+                            disabled={line.qty >= max}
+                            onClick={() => onQty(line.key, line.qty + 1)}
+                            className="flex h-6 w-6 items-center justify-center rounded-md text-zinc-500 hover:bg-zinc-100 disabled:opacity-40"
+                          >
+                            <Icon.Plus size={12} />
+                          </button>
+                        </div>
+                        <span className="text-sm font-semibold" style={{ color: primary }}>
+                          {taka(lineUnitPrice(line.product, line.variantId) * line.qty)}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => onRemove(line.key)}
+                          className="text-[11px] text-zinc-400 underline hover:text-red-600"
+                        >
+                          Remove
+                        </button>
+                      </div>
+                    </div>
+                  </li>
+                );
+              })}
+            </ul>
+
+            <div className="flex flex-col gap-3 border-t border-zinc-100 px-4 py-4">
+              {zones.length ? (
+                <Field label="Delivery area" hint="The AI and checkout use the same zone charges">
+                  <select
+                    value={zoneName}
+                    onChange={(event) => setZoneName(event.target.value)}
+                    className={inputClass}
+                    required
+                  >
+                    <option value="">Choose your area…</option>
+                    {zones.map((zone) => (
+                      <option key={zone.name} value={zone.name}>
+                        {zone.name} — {taka(zone.charge)} · {zone.etaDays} day
+                        {zone.etaDays === 1 ? '' : 's'}
+                      </option>
+                    ))}
+                  </select>
+                </Field>
+              ) : (
+                <p className="rounded-xl border border-zinc-200 bg-zinc-50 px-3 py-2 text-xs text-zinc-500">
+                  <Icon.Truck size={13} className="mr-1 inline" />
+                  Delivery charge will be confirmed by the shop on the call.
+                </p>
+              )}
+
+              <div className="grid gap-3 sm:grid-cols-2">
+                <Field label="Your name">
+                  <input
+                    value={name}
+                    onChange={(event) => setName(event.target.value)}
+                    className={inputClass}
+                    required
+                    maxLength={80}
+                  />
+                </Field>
+                <Field label="Phone">
+                  <input
+                    value={phone}
+                    onChange={(event) => setPhone(event.target.value)}
+                    placeholder="01XXXXXXXXX"
+                    className={inputClass}
+                    required
+                    maxLength={20}
+                  />
+                </Field>
+              </div>
+              <Field label="Delivery address">
+                <textarea
+                  value={address}
+                  onChange={(event) => setAddress(event.target.value)}
+                  rows={2}
+                  className={inputClass}
+                  required
+                  minLength={5}
+                  maxLength={300}
+                />
+              </Field>
+              <Field label="Note (optional)">
+                <input
+                  value={note}
+                  onChange={(event) => setNote(event.target.value)}
+                  className={inputClass}
+                  maxLength={500}
+                  placeholder="e.g. deliver in the evening"
+                />
+              </Field>
+
+              <ErrorNote message={error} />
+            </div>
+
+            <div className="mt-auto flex flex-col gap-2 border-t border-zinc-100 bg-zinc-50 px-4 py-4">
+              <span className="flex items-center justify-between text-sm text-zinc-500">
+                <span>Subtotal</span>
+                <span>{taka(subtotal)}</span>
+              </span>
+              <span className="flex items-center justify-between text-sm text-zinc-500">
+                <span>Delivery {zoneName ? `· ${zoneName}` : ''}</span>
+                <span>{zones.length ? taka(deliveryCharge) : 'To be confirmed'}</span>
+              </span>
+              <span className="flex items-center justify-between border-t border-zinc-200 pt-2 text-base font-semibold text-zinc-800">
+                <span>Total</span>
+                <span style={{ color: primary }}>{taka(total)}</span>
+              </span>
+              <Button
+                type="submit"
+                size="lg"
+                disabled={busy}
+                className="mt-1 w-full"
+                icon={<Icon.Bag size={16} />}
+              >
+                {busy ? 'Placing order…' : 'Place COD order'}
+              </Button>
+              <span className="text-center text-[10px] text-zinc-400">
+                No online payment — pay cash when it arrives.
+              </span>
+            </div>
+          </form>
+        )}
+      </aside>
+    </>
   );
 }
-
 /* ──────────────────────────── AI chat widget ───────────────────────────── */
 
 interface ChatMsg {
@@ -434,18 +1226,40 @@ interface ChatMsg {
   streaming?: boolean;
 }
 
-function ChatWidget({ shop, accent }: { shop: Storefront; accent: string }) {
-  const [open, setOpen] = useState(false);
+function ChatWidget({
+  shop,
+  primary,
+  accent,
+  onSelectProduct,
+}: {
+  shop: StorefrontPayload;
+  primary: string;
+  accent: string;
+  onSelectProduct: (productId: string) => void;
+}) {
+  const [open, setOpen] = useState(() => {
+    if (typeof window === 'undefined') return false;
+    return new URLSearchParams(window.location.search).get('chat') === '1';
+  });
   const [draft, setDraft] = useState('');
   const [msgs, setMsgs] = useState<ChatMsg[]>(() =>
     shop.ai.enabled && shop.ai.greeting ? [{ role: 'assistant', text: shop.ai.greeting }] : [],
   );
-  const [conversationId, setConversationId] = useState<string | undefined>(undefined);
+  const conversationKey = `easyshopai.conv.${shop.shop.slug}`;
+  const [conversationId, setConversationId] = useState<string | undefined>(() =>
+    typeof window === 'undefined'
+      ? undefined
+      : (window.localStorage.getItem(conversationKey) ?? undefined),
+  );
   const [busy, setBusy] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight });
+    if (open) {
+      requestAnimationFrame(() => {
+        scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: 'smooth' });
+      });
+    }
   }, [msgs, open, busy]);
 
   const send = async () => {
@@ -453,44 +1267,53 @@ function ChatWidget({ shop, accent }: { shop: Storefront; accent: string }) {
     if (!text || busy || !shop.ai.enabled) return;
     setDraft('');
     setBusy(true);
-    setMsgs((m) => [
-      ...m,
+    setMsgs((current) => [
+      ...current,
       { role: 'user', text },
       { role: 'assistant', text: '', streaming: true },
     ]);
 
-    const onEvent = (ev: ChatEvent) => {
-      if (ev.type === 'start') {
-        setConversationId(ev.conversationId);
+    const onEvent = (event: ChatEvent) => {
+      if (event.type === 'start') {
+        setConversationId(event.conversationId);
+        try {
+          window.localStorage.setItem(conversationKey, event.conversationId);
+        } catch {
+          /* storage may be unavailable; chat still works */
+        }
         return;
       }
-      if (ev.type === 'token') {
-        setMsgs((m) => {
-          const last = m[m.length - 1];
-          if (last?.role !== 'assistant') return m;
-          return [...m.slice(0, -1), { ...last, text: last.text + ev.text }];
+      if (event.type === 'token') {
+        setMsgs((current) => {
+          const last = current[current.length - 1];
+          if (last?.role !== 'assistant') return current;
+          return [...current.slice(0, -1), { ...last, text: last.text + event.text }];
         });
         return;
       }
-      if (ev.type === 'cards') {
-        setMsgs((m) => {
-          const last = m[m.length - 1];
-          if (last?.role === 'assistant') return [...m.slice(0, -1), { ...last, cards: ev.cards }];
-          return [...m, { role: 'assistant', text: '', cards: ev.cards }];
-        });
-        return;
-      }
-      if (ev.type === 'done') {
-        setMsgs((m) => {
-          const last = m[m.length - 1];
-          if (last?.role === 'assistant' && last.streaming) {
-            return [...m.slice(0, -1), { ...last, streaming: false }];
+      if (event.type === 'cards') {
+        setMsgs((current) => {
+          const last = current[current.length - 1];
+          if (last?.role === 'assistant') {
+            return [...current.slice(0, -1), { ...last, cards: event.cards }];
           }
-          return m;
+          return [...current, { role: 'assistant', text: '', cards: event.cards }];
         });
         return;
       }
-      if (ev.type === 'error') setMsgs((m) => [...m, { role: 'error', text: ev.message }]);
+      if (event.type === 'done') {
+        setMsgs((current) => {
+          const last = current[current.length - 1];
+          if (last?.role === 'assistant' && last.streaming) {
+            return [...current.slice(0, -1), { ...last, streaming: false }];
+          }
+          return current;
+        });
+        return;
+      }
+      if (event.type === 'error') {
+        setMsgs((current) => [...current, { role: 'error', text: event.message }]);
+      }
     };
 
     try {
@@ -505,12 +1328,12 @@ function ChatWidget({ shop, accent }: { shop: Storefront; accent: string }) {
       );
     } finally {
       setBusy(false);
-      setMsgs((m) => {
-        const last = m[m.length - 1];
+      setMsgs((current) => {
+        const last = current[current.length - 1];
         if (last?.role === 'assistant' && !last.text && !last.cards && last.streaming) {
-          return [...m.slice(0, -1), { role: 'assistant', text: '…', streaming: false }];
+          return [...current.slice(0, -1), { role: 'assistant', text: '…', streaming: false }];
         }
-        return m;
+        return current;
       });
     }
   };
@@ -522,58 +1345,105 @@ function ChatWidget({ shop, accent }: { shop: Storefront; accent: string }) {
       {!open ? (
         <button
           onClick={() => setOpen(true)}
-          className="fixed right-5 bottom-5 z-40 flex h-14 w-14 items-center justify-center rounded-full text-2xl text-white shadow-lg transition hover:scale-105"
-          style={{ backgroundColor: accent }}
-          aria-label="Chat with the AI assistant"
+          className="group fixed bottom-5 right-5 z-40 flex items-center gap-2 rounded-full px-4 py-3.5 text-sm font-semibold text-white shadow-xl transition hover:scale-[1.03] active:scale-95"
+          style={{ backgroundColor: primary, boxShadow: `0 10px 30px -6px ${primary}66` }}
+          aria-label="Chat with the AI agent"
         >
-          💬
+          <Icon.Chat size={18} />
+          <span className="hidden sm:inline">Ask the AI agent</span>
+          <span
+            className="absolute inset-0 -z-10 animate-ping rounded-full opacity-[0.07]"
+            style={{ backgroundColor: primary }}
+          />
         </button>
       ) : null}
 
       {open ? (
-        <div className="fixed right-3 bottom-3 z-40 flex h-[min(560px,80vh)] w-[min(380px,calc(100vw-1.5rem))] flex-col overflow-hidden rounded-2xl border border-zinc-200 bg-white shadow-2xl sm:right-5 sm:bottom-5">
+        <div
+          className="pop-in fixed bottom-3 right-3 z-40 flex h-[min(620px,88vh)] w-[min(400px,calc(100vw-1.5rem))] flex-col overflow-hidden rounded-3xl border border-zinc-200/80 bg-white shadow-2xl sm:bottom-5 sm:right-5"
+          role="dialog"
+          aria-label="AI agent chat"
+        >
           <div
-            className="flex items-center justify-between px-4 py-3 text-white"
-            style={{ backgroundColor: accent }}
+            className="flex items-center gap-3 px-4 py-3.5 text-white"
+            style={{ backgroundColor: primary }}
           >
-            <div className="flex flex-col">
-              <span className="text-sm font-semibold">AI assistant</span>
-              <span className="text-[11px] text-white/80">{shop.shop.name}</span>
+            <div className="flex h-9 w-9 items-center justify-center rounded-full bg-white/20 backdrop-blur">
+              <Icon.Spark size={17} />
             </div>
+            <div className="flex flex-1 flex-col">
+              <span className="text-sm font-semibold leading-tight">{shop.shop.name} agent</span>
+              <span className="text-[11px] text-white/75">instant replies · COD orders</span>
+            </div>
+            <span
+              className="h-2 w-2 rounded-full"
+              style={{ backgroundColor: accent }}
+              aria-hidden="true"
+            />
             <button
               onClick={() => setOpen(false)}
-              className="rounded-full p-1 text-white/80 hover:bg-white/20"
+              aria-label="Close chat"
+              className="rounded-full p-1.5 text-white/85 transition hover:bg-white/15"
             >
-              ✕
+              <Icon.X size={17} />
             </button>
           </div>
 
-          <div ref={scrollRef} className="flex-1 space-y-3 overflow-y-auto bg-zinc-50 p-3">
-            {msgs.map((m, i) => (
+          <div ref={scrollRef} className="flex-1 space-y-3 overflow-y-auto bg-[#f7f7f6] px-3 py-4">
+            {msgs.map((message, index) => (
               <div
-                key={i}
-                className={m.role === 'user' ? 'flex justify-end' : 'flex justify-start'}
+                key={index}
+                className={message.role === 'user' ? 'flex justify-end' : 'flex justify-start'}
               >
-                {m.role === 'user' ? (
-                  <div className="max-w-[85%] rounded-2xl rounded-br-sm bg-emerald-600 px-3 py-2 text-sm text-white">
-                    {m.text}
+                {message.role === 'user' ? (
+                  <div
+                    className="max-w-[85%] rounded-2xl rounded-br-md px-3.5 py-2.5 text-sm leading-relaxed text-white"
+                    style={{ backgroundColor: primary }}
+                  >
+                    {message.text}
                   </div>
-                ) : m.role === 'error' ? (
-                  <div className="max-w-[90%] rounded-2xl bg-red-50 px-3 py-2 text-xs text-red-600">
-                    {m.text}
+                ) : message.role === 'error' ? (
+                  <div className="flex max-w-[92%] items-start gap-1.5 rounded-2xl bg-red-50 px-3 py-2 text-xs text-red-600">
+                    <Icon.Alert size={13} className="mt-0.5 shrink-0" />
+                    {message.text}
                   </div>
                 ) : (
-                  <div className="flex max-w-[92%] flex-col gap-2">
-                    <div className="rounded-2xl rounded-bl-sm bg-white px-3 py-2 text-sm text-zinc-800 shadow-sm ring-1 ring-zinc-100">
-                      {m.text}
-                      {m.streaming ? (
-                        <span className="ml-0.5 inline-block animate-pulse">▍</span>
-                      ) : null}
+                  <div className="flex max-w-[94%] flex-col gap-2">
+                    <div className="flex items-start gap-2">
+                      <div
+                        className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-white"
+                        style={{ backgroundColor: primary }}
+                      >
+                        <Icon.Spark size={12} />
+                      </div>
+                      <div className="rounded-2xl rounded-tl-md border border-zinc-200/70 bg-white px-3.5 py-2.5 text-sm leading-relaxed text-zinc-800 shadow-sm">
+                        {message.text}
+                        {message.streaming ? (
+                          <span className="ml-0.5 inline-flex items-center gap-0.5 align-middle">
+                            {['0ms', '150ms', '300ms'].map((delay) => (
+                              <span
+                                key={delay}
+                                className="h-1 w-1 animate-bounce rounded-full bg-zinc-400"
+                                style={{ animationDelay: delay }}
+                              />
+                            ))}
+                          </span>
+                        ) : null}
+                      </div>
                     </div>
-                    {m.cards?.length ? (
-                      <div className="grid grid-cols-2 gap-2">
-                        {m.cards.map((c) => (
-                          <ChatCard key={c.id} card={c} accent={accent} />
+                    {message.cards?.length ? (
+                      <div
+                        className={`grid gap-2 ${
+                          message.cards.length === 1 ? 'max-w-[70%]' : 'grid-cols-2'
+                        }`}
+                      >
+                        {message.cards.map((card) => (
+                          <ChatCard
+                            key={card.id}
+                            card={card}
+                            primary={primary}
+                            onSelect={() => onSelectProduct(card.id)}
+                          />
                         ))}
                       </div>
                     ) : null}
@@ -583,24 +1453,24 @@ function ChatWidget({ shop, accent }: { shop: Storefront; accent: string }) {
             ))}
           </div>
 
-          <div className="flex items-center gap-2 border-t border-zinc-200 p-2">
+          <div className="flex items-center gap-2 border-t border-zinc-100 bg-white px-3 py-2.5">
             <input
               value={draft}
               onChange={(e) => setDraft(e.target.value)}
               onKeyDown={(e) => {
                 if (e.key === 'Enter' && !e.nativeEvent.isComposing) void send();
               }}
-              placeholder="Message… (বাংলা / English / Banglish)"
-              className="flex-1 rounded-full border border-zinc-300 px-3 py-2 text-sm outline-none focus:border-emerald-500"
+              placeholder="বাংলা / English / Banglish…"
+              className="h-10 flex-1 rounded-full border border-zinc-200 bg-[#f7f7f6] px-4 text-sm outline-none transition focus:border-brand-500 focus:bg-white focus:ring-4 focus:ring-brand-500/10"
             />
             <button
               onClick={() => void send()}
               disabled={busy || !draft.trim()}
-              className="flex h-9 w-9 items-center justify-center rounded-full text-white transition disabled:opacity-40"
-              style={{ backgroundColor: accent }}
-              aria-label="Send"
+              className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-white transition disabled:opacity-40"
+              style={{ backgroundColor: primary }}
+              aria-label="Send message"
             >
-              ➤
+              <Icon.Send size={16} />
             </button>
           </div>
         </div>
@@ -609,27 +1479,53 @@ function ChatWidget({ shop, accent }: { shop: Storefront; accent: string }) {
   );
 }
 
-function ChatCard({ card, accent }: { card: ChatProductCard; accent: string }) {
+function ChatCard({
+  card,
+  primary,
+  onSelect,
+}: {
+  card: ChatProductCard;
+  primary: string;
+  onSelect: () => void;
+}) {
   return (
-    <div className="flex flex-col overflow-hidden rounded-lg border border-zinc-200 bg-white shadow-sm">
+    <button
+      type="button"
+      onClick={onSelect}
+      className="overflow-hidden rounded-2xl border border-zinc-200/70 bg-white text-left shadow-sm transition hover:-translate-y-0.5 hover:shadow-md"
+      aria-label={`View ${card.name}`}
+    >
       <div className="aspect-square w-full bg-zinc-100">
         {card.image ? (
-          <img src={card.image} alt={card.name} className="h-full w-full object-cover" />
+          <img
+            src={card.image}
+            alt={card.name}
+            loading="lazy"
+            className="h-full w-full object-cover"
+          />
         ) : (
-          <div className="flex h-full w-full items-center justify-center text-2xl text-zinc-300">
-            🛍️
+          <div className="flex h-full w-full items-center justify-center text-zinc-300">
+            <Icon.Package size={22} />
           </div>
         )}
       </div>
-      <div className="flex flex-col gap-0.5 p-2">
-        <span className="line-clamp-2 text-[11px] font-medium leading-tight">{card.name}</span>
-        <span className="text-xs font-bold" style={{ color: accent }}>
-          {taka(card.price)}
+      <div className="flex flex-col gap-0.5 p-2.5">
+        <span className="line-clamp-2 text-xs font-semibold leading-tight text-zinc-800">
+          {card.name}
         </span>
-        {card.stock !== null && card.stock !== undefined ? (
-          <span className="text-[10px] text-zinc-400">{card.stock} in stock</span>
-        ) : null}
+        <span className="flex items-center justify-between gap-1">
+          <span className="text-[13px] font-bold" style={{ color: primary }}>
+            {taka(card.price)}
+          </span>
+          {card.stock !== null && card.stock !== undefined ? (
+            <span
+              className={`text-[10px] ${card.stock > 0 ? 'text-zinc-400' : 'font-medium text-red-500'}`}
+            >
+              {card.stock > 0 ? `${card.stock} left` : 'sold out'}
+            </span>
+          ) : null}
+        </span>
       </div>
-    </div>
+    </button>
   );
 }

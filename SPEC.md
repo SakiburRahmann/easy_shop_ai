@@ -7,11 +7,14 @@
 
 Multi-tenant platform for small online sellers (F-commerce, starting Bangladesh):
 
-1. **Instant storefront** — a seller signs up, adds shop details and products, picks a template,
-   and gets a live store at `easyshopai.app/s/<shop-slug>` within minutes.
+1. **Store builder** — a seller signs up, chooses their business type, names the shop, picks a
+   template + theme, sets delivery zones and AI rules, and gets a live store at
+   `easyshopai.app/s/<shop-slug>` within minutes. The platform seeds starter categories for the
+   chosen business type, so the store and its AI agent are useful from minute one.
 2. **Marketplace discovery** — customers also arrive through EasyShopAI itself: the home page lists
-   all shops (`GET /shops` public directory) so the platform is a buying destination, not only a
-   set of storefronts (Shopify-like: sellers open their store, customers browse shops).
+   all shops (`GET /shops`) and searches products across every shop
+   (`GET /search/products`) so the platform is a buying destination, not only a set of storefronts
+   (Shopify-like: sellers open their store, customers browse shops and products).
 3. **AI sales assistant** — a chat agent on every storefront that talks to customers in
    Bangla, English or Banglish. It finds products from the real catalog, answers questions about
    price, stock, delivery (`get_shop_info` returns zones, charges, ETA) and policies, negotiates
@@ -33,10 +36,15 @@ integration, live payments, courier APIs, voice.
 
 **In scope**
 
-- Seller signup/login; shop profile (name, logo, contact, delivery zones & charges, return policy)
+- Seller signup/login; store builder (business type, shop profile, logo, contact, delivery zones
+  and charges, return policy); starter categories seeded from the business type
 - Product catalog: name, description, images, price, `floor_price`, variants (size, color), stock, category
-- 2–3 storefront templates; theme color and logo customization
-- Public storefront: home, category, product page, cart, COD checkout
+- Buyer cart: add products (with variant and quantity), edit quantities, then one combined COD checkout; variantless products decrement their own stock
+- 3 storefront templates (`classic`, `modern`, `boutique`); primary/accent colors, display font
+  and logo customization; switching templates keeps all data
+- Public storefront: home, category, product search, product deep links, COD checkout with a
+  delivery-zone selector
+- Public marketplace product search across every shop, with prices and shop cards
 - AI assistant: natural-language product search, answers from shop data, order capture, bargaining,
   human handoff
 - Seller dashboard (web) + mobile app: orders list/status, product quick edit, AI conversation
@@ -66,8 +74,9 @@ Seller app → Mobile (Expo) ────────┘        │
 - **Auth:** one Supabase account system; the same login works on web and mobile.
 - **Multi-tenancy:** every table has `shop_id`, every query is filtered server-side. AI tools are
   scoped to a server-set shop ID.
-- **Templates:** React components receiving shop data as props; adding a template = adding a
-  component, not generating code.
+- **Templates:** three visually distinct storefront shells driven by a shared template config
+  (`apps/web/src/components/storefront/templates.ts`); adding a template = adding an entry and a
+  DB constraint value, not generating code.
 - **Monorepo:** pnpm workspaces + Turborepo, `apps/web`, `apps/mobile`, `apps/api`,
   `packages/shared`.
 
@@ -90,9 +99,9 @@ Seller app → Mobile (Expo) ────────┘        │
 
 ```
 users          (id, email, role, created_at)
-shops          (id, owner_id, name, slug, logo, template_id, theme, contact, delivery_rules, policies)
+shops          (id, owner_id, name, slug, business_type, logo, template_id, theme, contact, delivery_rules, policies)
 categories     (id, shop_id, name)
-products       (id, shop_id, name, description, category_id, price, floor_price, images, active)
+products       (id, shop_id, name, description, category_id, price, floor_price, stock, images, active)
 variants       (id, product_id, size, color, stock, price_override)
 orders         (id, shop_id, customer_name, phone, address, total, status, payment_method, source)
 order_items    (id, order_id, variant_id, qty, unit_price)
@@ -104,20 +113,28 @@ device_tokens  (user_id, token, platform)
 
 Order statuses: `pending → confirmed → shipped → delivered` (+ `cancelled`).
 
+`business_type` is one of `fashion | electronics | beauty | groceries | home | kids | other`.
+`template_id` is one of `classic | modern | boutique`. `theme` is JSONB with optional
+`primaryColor`, `accentColor` and `font` (`sans | serif`). Variant stock is reserved atomically when
+an order is placed (`adjust_variant_stock` SQL function) and restored when an order is cancelled.
+Products without variants use their own `stock` column and the matching
+`adjust_product_stock` function; variant products ignore it.
+
 ## 7. API surface (draft — refine as endpoints are built)
 
 - `POST /auth/*` — via Supabase
-- `GET /shops` (public marketplace directory: shop cards with product counts and catalog images; `?q=&limit=&offset=`)
-- `POST /shops`, `GET/PATCH /shops/:id` (seller)
-- `GET /s/:slug` (public storefront payload), `GET /s/:slug/products`, `GET /products/:id`
+- `GET /shops` (public marketplace directory: shop cards with business type, product counts and catalog images; `?q=&businessType=&limit=&offset=`)
+- `GET /search/products` (public cross-shop product search: `?q=&category=&shopSlug=&minPrice=&maxPrice=&sort=&limit=&offset=`; returns product + shop card)
+- `POST /shops` (seller; stores business type, seeds starter categories), `GET/PATCH /shops/:id` (seller)
+- `GET /s/:slug` (public storefront payload), `GET /s/:slug/products`, `GET /products/:id` (public product detail `{ product, shop }`)
 - Storefront URLs on the static site: `/s?shop=<slug>` (Cloudflare Pages normalizes deep
   `/s/<slug>` paths to `/s`; the shell reads the slug from the query)
 - Templates render distinct storefront layouts: `classic` (clean catalog grid) and `modern`
   (hero banner + editorial product cards), both using `theme.primaryColor`
 - `POST /products`, `PATCH /products/:id`, `DELETE /products/:id` (seller, shop-scoped)
 - `POST /uploads` — image upload (Supabase Storage)
-- `POST /orders`, `GET /orders` (seller), `PATCH /orders/:id/status`
-- `POST /chat` — AI assistant turn (SSE/streaming), `GET /conversations` (seller)
+- `POST /s/:slug/orders` (public COD; optional `deliveryZone` when the shop has zones), `GET /shops/:id/orders` (seller), `PATCH /orders/:id/status`
+- `POST /chat` — AI assistant turn (SSE/streaming), `GET /shops/:id/conversations` (seller)
 - `GET/PATCH /ai-settings`, `POST /handoff/:conversationId`
 
 All request/response shapes are Zod schemas in `packages/shared`.
@@ -130,9 +147,9 @@ All request/response shapes are Zod schemas in `packages/shared`.
 | ---------------------------------------------------------- | ----------------------------------------------------------------- |
 | `search_products(query, max_price, color, size, category)` | Find matching products; returns real items with images and prices |
 | `get_product(id)`                                          | Full details and variant stock                                    |
-| `get_shop_info()`                                          | Delivery zones, charges, times, return policy, hours              |
+| `get_shop_info()`                                          | Business type, categories, delivery zones, charges, return policy |
 | `check_discount(product_id, offered_price)`                | Server-side floor-price check; accept / reject / counter          |
-| `create_order(items, name, phone, address)`                | Creates a pending order                                           |
+| `create_order(items, name, phone, address, delivery_zone)` | Creates a pending order with a server-priced delivery charge      |
 | `handoff_to_owner(reason)`                                 | Flags the conversation for the seller                             |
 
 **Flow example:** "ekta lal t-shirt lagbe, 1000 takar moddhe" → `search_products(color=red,
@@ -145,8 +162,11 @@ category=t-shirt, max_price=1000)` → reply with short product cards (rendered 
 - If a tool returns nothing, say so; never guess.
 - Prices/stock stated by the AI must come from tool results (target: zero hallucinated facts).
 - The model never decides prices; `check_discount` does. The model phrases accept/reject/counter.
-- `create_order` only after explicit customer confirmation of items, total and address.
+- `create_order` only after explicit customer confirmation of items, delivery charge, total and
+  address. Delivery is priced from the shop's zones, never from model text. When the shop has
+  zones, `create_order` requires the zone name and fails with the available zones if missing.
 - Rate limit per IP and per shop; cap messages per conversation.
+- Product cards are streamed from tool results; the UI never renders a product from model prose.
 - Customer text is untrusted; permissions come from the system prompt and server.
 - Every conversation is logged for seller review.
 - Policies/FAQs go in the prompt for MVP; pgvector retrieval when shops grow.
@@ -157,6 +177,9 @@ category=t-shirt, max_price=1000)` → reply with short product cards (rendered 
 - **NFR-02** 100% of prices and stock stated by the AI come from database results.
 - **NFR-03** Every query is limited to the authenticated shop (tenant isolation).
 - **NFR-04** Data changed on one client appears on the other within 5s.
+- **NFR-05** An order can never oversell stock: variant (or product-level, for variantless
+  products) stock is reserved atomically before the order row is created, and restored if the
+  customer (or seller) cancels.
 
 ## 10. Evaluation plan
 

@@ -10,7 +10,7 @@ import type { EnvShape } from '../lib/env';
 import { requireAuth, ownedShop } from '../lib/auth';
 import { notFound, param, parseBody } from '../lib/validation';
 import { str, toOrder, toOrderItemView, toOrderView, toShop } from '../lib/serialize';
-import { createOrderForShop } from '../lib/orders';
+import { createOrderForShop, restoreStockForOrder } from '../lib/orders';
 
 export const orderRoutes = new Hono<EnvShape>();
 
@@ -30,6 +30,7 @@ orderRoutes.post('/s/:slug/orders', async (c) => {
     shop: toShop(shopRow),
     items: input.items,
     customer: input.customer,
+    deliveryZone: input.deliveryZone,
     note: input.note,
     source: 'storefront',
   });
@@ -95,14 +96,21 @@ orderRoutes.patch('/orders/:orderId/status', requireAuth, async (c) => {
   const db = c.get('db');
   const { data, error } = await db
     .from('orders')
-    .select('shop_id')
+    .select('shop_id, status')
     .eq('id', param(c, 'orderId'))
     .maybeSingle();
   if (error || !data) return notFound(c, 'Order');
-  const shop = await ownedShop(c, str((data as Record<string, unknown>).shop_id));
+  const current = data as Record<string, unknown>;
+  const shop = await ownedShop(c, str(current.shop_id));
   if (shop instanceof Response) return shop;
 
   const input = await parseBody(c, orderStatusUpdateInputSchema);
+  if (str(current.status) === 'cancelled' && input.status !== 'cancelled') {
+    return c.json(
+      { error: 'Cancelled orders cannot be reopened — create a new order instead' },
+      400,
+    );
+  }
   const { data: updated, error: updateError } = await db
     .from('orders')
     .update({ status: input.status })
@@ -111,5 +119,11 @@ orderRoutes.patch('/orders/:orderId/status', requireAuth, async (c) => {
     .single();
   if (updateError || !updated)
     return c.json({ error: updateError?.message ?? 'Update failed' }, 500);
+
+  // Cancelling returns reserved stock to the catalog. A repeated cancel is a
+  // no-op, so sellers can safely re-open the dropdown.
+  if (input.status === 'cancelled' && str(current.status) !== 'cancelled') {
+    await restoreStockForOrder(db, param(c, 'orderId'));
+  }
   return c.json(orderSchema.parse(toOrder(updated)));
 });

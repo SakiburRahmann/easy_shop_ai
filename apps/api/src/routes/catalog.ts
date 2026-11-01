@@ -18,7 +18,7 @@ import { str, toProductAdmin, toVariant } from '../lib/serialize';
 export const catalogRoutes = new Hono<EnvShape>();
 
 const PRODUCT_FIELDS =
-  'id, shop_id, category_id, name, description, price, floor_price, images, active, created_at, updated_at, variants(id, product_id, size, color, stock, price_override, created_at)';
+  'id, shop_id, category_id, name, description, price, floor_price, stock, images, active, created_at, updated_at, variants(id, product_id, size, color, stock, price_override, created_at)';
 
 interface SellerProductListQuery {
   q?: string;
@@ -90,6 +90,7 @@ catalogRoutes.post('/shops/:shopId/products', requireAuth, async (c) => {
       description: input.description ?? null,
       price: input.price.toFixed(2),
       floor_price: (input.floorPrice ?? 0).toFixed(2),
+      stock: input.stock ?? 0,
       images: input.images ?? [],
       active: input.active ?? true,
     })
@@ -152,6 +153,7 @@ catalogRoutes.patch('/products/:productId', requireAuth, async (c) => {
   if (input.description !== undefined) patch.description = input.description;
   if (input.price !== undefined) patch.price = input.price.toFixed(2);
   if (input.floorPrice !== undefined) patch.floor_price = input.floorPrice.toFixed(2);
+  if (input.stock !== undefined) patch.stock = input.stock;
   if (input.images !== undefined) patch.images = input.images;
   if (input.active !== undefined) patch.active = input.active;
   if (Object.prototype.hasOwnProperty.call(input, 'categoryId'))
@@ -195,6 +197,20 @@ catalogRoutes.delete('/products/:productId', requireAuth, async (c) => {
   const productId = await productAndShop(c, param(c, 'productId'));
   if (productId instanceof Response) return productId;
   const db = c.get('db');
+
+  // Products with order history are archived, not deleted: order_items keep
+  // pointing at the row, and the storefront/AI stop showing it immediately.
+  const { count, error: countError } = await db
+    .from('order_items')
+    .select('id', { count: 'exact', head: true })
+    .eq('product_id', productId);
+  if (countError) return c.json({ error: countError.message }, 500);
+  if ((count ?? 0) > 0) {
+    const { error } = await db.from('products').update({ active: false }).eq('id', productId);
+    if (error) return c.json({ error: error.message }, 500);
+    return c.json({ ok: true, archived: true });
+  }
+
   const { error } = await db.from('products').delete().eq('id', productId);
   if (error) return c.json({ error: error.message }, 500);
   return c.json({ ok: true });
