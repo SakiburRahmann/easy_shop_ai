@@ -5,32 +5,42 @@
 
 ## 1. Product summary
 
-Multi-tenant platform for small online sellers (F-commerce, starting Bangladesh):
+EasyShopAI is a **two-sided commerce platform**: a Shopify-style store builder for sellers and an
+Amazon-style marketplace for buyers, with an AI sales agent inside every store.
 
-1. **Store builder** — a seller signs up, chooses their business type, names the shop, picks a
-   template + theme, sets delivery zones and AI rules, and gets a live store at
-   `easyshopai.app/s/<shop-slug>` within minutes. The platform seeds starter categories for the
-   chosen business type, so the store and its AI agent are useful from minute one.
-2. **Marketplace discovery** — customers also arrive through EasyShopAI itself: the home page lists
-   all shops (`GET /shops`) and searches products across every shop
-   (`GET /search/products`) so the platform is a buying destination, not only a set of storefronts
-   (Shopify-like: sellers open their store, customers browse shops and products).
-3. **AI sales assistant** — a chat agent on every storefront that talks to customers in
-   Bangla, English or Banglish. It finds products from the real catalog, answers questions about
-   price, stock, delivery (`get_shop_info` returns zones, charges, ETA) and policies, negotiates
-   within the seller's rules, and collects COD order details — acting as the shop's full
-   customer-service agent.
+**Seller journey (Shopify side)**
 
-One account and one data source across web and mobile. Future work (not in MVP): Meta Messenger
-integration, live payments, courier APIs, voice.
+- Signs up, chooses a business type, names the shop, picks a template + theme, sets delivery zones
+  and AI rules, and gets a live storefront at `/s?shop=<slug>` within minutes.
+- The platform seeds starter categories for the chosen business type, so the store and its AI agent
+  are useful from minute one.
+- Manages products, variants, stock, COD orders, customer chats and AI settings from one dashboard.
+
+**Buyer journey (Amazon side)**
+
+- Arrives at the EasyShopAI marketplace, browses every shop, searches products across all shops and
+  opens any storefront without creating an account.
+- Adds products to a cart, picks a delivery zone, and places one cash-on-delivery order per shop.
+- Can ask that shop's AI agent about products, prices, stock, delivery and policies, bargain within
+  the seller's limits, and complete a COD order in Bangla, English or Banglish.
+
+**Why both sides share one platform**
+
+- A store builder alone has no buyer demand; a marketplace alone has no seller tooling.
+  EasyShopAI gives each seller a real store and gives buyers one place to discover every seller.
+- Every store is AI-native: the assistant is scoped to that shop's catalog and rules, never mixes
+  tenants, and never invents a product or price.
+
+One account and one data source across web and mobile. Future work (not in MVP): buyer accounts and
+order tracking, Meta Messenger integration, live payments, courier APIs, voice.
 
 ## 2. Users and roles
 
-| Role     | Description                                            | Clients                    |
-| -------- | ------------------------------------------------------ | -------------------------- |
-| Seller   | Manages shop, products, AI rules, orders               | Web dashboard + mobile app |
-| Customer | Browses storefront, chats with AI, orders (no account) | Web storefront             |
-| Admin    | Manages sellers, templates, abuse reports (basic)      | Web                        |
+| Role     | Description                                                                 | Clients                    |
+| -------- | --------------------------------------------------------------------------- | -------------------------- |
+| Seller   | Manages shop, products, AI rules, orders                                    | Web dashboard + mobile app |
+| Customer | Browses the marketplace and storefronts, chats with AI, orders (no account) | Web                        |
+| Admin    | Manages sellers, templates, abuse reports (basic)                           | Web                        |
 
 ## 3. MVP scope
 
@@ -38,24 +48,30 @@ integration, live payments, courier APIs, voice.
 
 - Seller signup/login; store builder (business type, shop profile, logo, contact, delivery zones
   and charges, return policy); starter categories seeded from the business type
-- Product catalog: name, description, images, price, `floor_price`, variants (size, color), stock, category
-- Buyer cart: add products (with variant and quantity), edit quantities, then one combined COD checkout; variantless products decrement their own stock
+- Product catalog: name, description, images, price, `floor_price`, variants (size, color), stock,
+  category
+- Buyer cart: add products (with variant and quantity), edit quantities, then one combined COD
+  checkout per shop; variantless products decrement their own stock
 - 3 storefront templates (`classic`, `modern`, `boutique`); primary/accent colors, display font
   and logo customization; switching templates keeps all data
-- Public storefront: home, category, product search, product deep links, COD checkout with a
-  delivery-zone selector
-- Public marketplace product search across every shop, with prices and shop cards
+- Public marketplace: shop directory with business type, catalog images and product counts; product
+  search across every shop with prices, categories and shop cards
+- Public storefront: catalog, category filter, product search, product deep links, cart and COD
+  checkout with a delivery-zone selector
 - AI assistant: natural-language product search, answers from shop data, order capture, bargaining,
   human handoff
 - Seller dashboard (web) + mobile app: orders list/status, product quick edit, AI conversation
   logs, push notifications for new orders
 - AI settings per shop: tone, languages, max discount % / floor prices, policies the AI may state
 - Conversation logging; rate limits; message caps
+- Two-side integrity: marketplace and storefront responses never expose floor prices, another
+  shop's products, AI settings or customer data
 
 **Out of scope (roadmap only)**
 
 - Messenger/Facebook page integration (demo in Meta dev mode only if reached)
 - Live payment gateways, courier APIs, voice input
+- Buyer accounts, order tracking, reviews and recommendations
 - CSV import, analytics dashboard (stretch)
 
 ## 4. Architecture
@@ -103,8 +119,8 @@ shops          (id, owner_id, name, slug, business_type, logo, template_id, them
 categories     (id, shop_id, name)
 products       (id, shop_id, name, description, category_id, price, floor_price, stock, images, active)
 variants       (id, product_id, size, color, stock, price_override)
-orders         (id, shop_id, customer_name, phone, address, total, status, payment_method, source)
-order_items    (id, order_id, variant_id, qty, unit_price)
+orders         (id, shop_id, customer_name, phone, address, note, subtotal, delivery_charge, total, status, payment_method, source)
+order_items    (id, order_id, product_id, variant_id, qty, unit_price)
 conversations  (id, shop_id, visitor_id, status, needs_owner)
 messages       (id, conversation_id, role, content, tool_calls, created_at)
 ai_settings    (shop_id, tone, languages, max_discount_pct, extra_instructions)
@@ -120,24 +136,43 @@ an order is placed (`adjust_variant_stock` SQL function) and restored when an or
 Products without variants use their own `stock` column and the matching
 `adjust_product_stock` function; variant products ignore it.
 
-## 7. API surface (draft — refine as endpoints are built)
+## 7. API surface
 
-- `POST /auth/*` — via Supabase
-- `GET /shops` (public marketplace directory: shop cards with business type, product counts and catalog images; `?q=&businessType=&limit=&offset=`)
-- `GET /search/products` (public cross-shop product search: `?q=&category=&shopSlug=&minPrice=&maxPrice=&sort=&limit=&offset=`; returns product + shop card)
-- `POST /shops` (seller; stores business type, seeds starter categories), `GET/PATCH /shops/:id` (seller)
-- `GET /s/:slug` (public storefront payload), `GET /s/:slug/products`, `GET /products/:id` (public product detail `{ product, shop }`)
-- Storefront URLs on the static site: `/s?shop=<slug>` (Cloudflare Pages normalizes deep
-  `/s/<slug>` paths to `/s`; the shell reads the slug from the query)
-- Templates render distinct storefront layouts: `classic` (clean catalog grid) and `modern`
-  (hero banner + editorial product cards), both using `theme.primaryColor`
-- `POST /products`, `PATCH /products/:id`, `DELETE /products/:id` (seller, shop-scoped)
-- `POST /uploads` — image upload (Supabase Storage)
-- `POST /s/:slug/orders` (public COD; optional `deliveryZone` when the shop has zones), `GET /shops/:id/orders` (seller), `PATCH /orders/:id/status`
-- `POST /chat` — AI assistant turn (SSE/streaming), `GET /shops/:id/conversations` (seller)
-- `GET/PATCH /ai-settings`, `POST /handoff/:conversationId`
+**Public marketplace and storefront**
 
-All request/response shapes are Zod schemas in `packages/shared`.
+- `GET /shops` — shop directory: name, slug, business type, template, theme, contact, active product
+  count and up to four catalog images; filters `?q=&businessType=&limit=&offset=`
+- `GET /search/products` — cross-shop product search:
+  `?q=&category=&shopSlug=&minPrice=&maxPrice=&sort=&limit=&offset=`; returns a public product plus
+  its marketplace shop card
+- `GET /s/:slug` — full public storefront payload (shop, categories, first products, AI greeting)
+- `GET /s/:slug/products` — filterable public catalog (`q`, `categoryId`, `minPrice`, `maxPrice`, `sort`)
+- `GET /products/:id` — public product detail `{ product, shop }` for deep links
+- `POST /s/:slug/orders` — public COD checkout for one shop; optional `deliveryZone` when the shop
+  has zones; the server prices every line and the delivery charge
+- Storefront URL on the static site: `/s?shop=<slug>` (Cloudflare Pages normalizes deep `/s/<slug>`
+  paths to `/s`; the shell reads the slug from the query)
+- Templates render distinct storefront layouts: `classic` (clean catalog grid), `modern` (hero banner
+  - editorial cards) and `boutique` (centered, serif display), all driven by `theme`
+
+**Seller**
+
+- `POST /auth/signup`, `POST /auth/login`, `GET /auth/me` — session and associated shop
+- `POST /shops` — create the shop from the builder (business type seeds starter categories),
+  `GET/PATCH /shops/:id`
+- `POST /shops/:id/categories`, `PATCH/DELETE /categories/:id`
+- `GET/POST /shops/:id/products`, `PATCH/DELETE /products/:id`, `POST /products/:id/variants`,
+  `PATCH/DELETE /variants/:id`
+- `POST /uploads` — product/logo image upload (Supabase Storage)
+- `GET /shops/:id/orders`, `PATCH /orders/:id/status`
+- `GET/PATCH /shops/:id/ai-settings`
+- `GET /shops/:id/conversations`, `GET /conversations/:id/messages`,
+  `PATCH /conversations/:id` (status/handoff inbox)
+- `POST /chat` — public AI assistant turn (SSE streaming); `handoff_to_owner` is an AI tool that
+  flags the conversation for the seller
+
+All request/response shapes are Zod schemas in `packages/shared`; the API parses them, never trusts
+client data.
 
 ## 8. AI assistant contract
 

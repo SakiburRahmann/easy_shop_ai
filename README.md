@@ -2,12 +2,14 @@
 
 [![CI](https://github.com/SakiburRahmann/easy_shop_ai/actions/workflows/ci.yml/badge.svg)](https://github.com/SakiburRahmann/easy_shop_ai/actions/workflows/ci.yml)
 
-An AI commerce platform for small online sellers (CSE 327 project). Sellers sign up, choose their
-business type, build a store with one of three templates and a custom theme, set delivery zones and
-get a live storefront with an AI assistant that answers customers in Bangla, English or Banglish,
-searches the real catalog, bargains within seller-set floor prices, and collects cash-on-delivery
-orders. Customers can browse shops, search products across the whole marketplace, fill a cart and
-check out several items in one COD order. One account and one data source across web and mobile.
+EasyShopAI is a **two-sided commerce platform** (CSE 327 project): a **Shopify-style store builder**
+for sellers and an **Amazon-style marketplace** for buyers, with an AI sales agent inside every
+store. Sellers sign up, choose their business type, build a store with one of three templates and a
+custom theme, set delivery zones and get a live storefront with an AI assistant that answers
+customers in Bangla, English or Banglish, searches the real catalog, bargains within seller-set
+floor prices, and collects cash-on-delivery orders. Buyers browse every shop, search products across
+the whole marketplace, fill a cart and check out several items in one COD order. One account and one
+data source across web and mobile.
 
 ## Architecture
 
@@ -55,15 +57,16 @@ pnpm --filter @easyshop/mobile start  # Expo dev server (scan with Expo Go / dev
 
 | Command                                                     | What it does                                        |
 | ----------------------------------------------------------- | --------------------------------------------------- |
-| `pnpm ci`                                                   | Everything CI runs: lint → typecheck → test → build |
+| `pnpm run ci`                                               | Everything CI runs: lint → typecheck → test → build |
 | `pnpm lint` / `pnpm typecheck` / `pnpm test` / `pnpm build` | Individual task across all packages                 |
 | `pnpm format`                                               | Format everything with Prettier                     |
-| `pnpm --filter @easyshop/api deploy`                        | Deploy the API to Cloudflare Workers                |
+| `pnpm --filter @easyshop/api run deploy`                    | Deploy the API to Cloudflare Workers                |
 
 ## Contributing
 
-All changes land through pull requests with green CI and at least one approval. See
-[CONTRIBUTING.md](CONTRIBUTING.md) for the full workflow, branch and commit conventions.
+The repository owner works directly on `main`. Teammates and AI agents use a branch and pull request
+unless the owner explicitly authorizes a direct `main` change. See [CONTRIBUTING.md](CONTRIBUTING.md)
+for the full workflow, branch and commit conventions.
 
 ## Documentation
 

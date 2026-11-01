@@ -5,14 +5,16 @@ clean, `main` stays deployable, and nothing gets lost in chat.
 
 ## Ground rules
 
-1. **`main` is protected.** Nobody pushes to `main` directly. Every change comes through a pull
-   request (PR) that passes CI and gets at least one approval.
-2. **One feature/one task per branch and per PR.** Small PRs get reviewed fast; giant PRs rot.
+1. **The owner works on `main`; everyone else uses a PR.** Teammates and AI agents must open a pull
+   request that passes CI and gets at least one approval. Only the repository owner may push or
+   merge directly to `main`, and only with an explicit decision to do so.
+2. **Teammates: one feature/one task per branch and per PR.** Small PRs get reviewed fast; giant PRs
+   rot.
 3. **Never commit secrets.** API keys, tokens and `.env` files stay out of the repo. Use
    `.env.example` as the template for what a developer needs locally.
 4. **CI must be green before merge.** If CI is red, fix it — do not merge around it.
 
-## Day-to-day workflow
+## Day-to-day workflow (teammates and AI agents)
 
 ```bash
 # 1. Start from an up-to-date main
@@ -80,7 +82,7 @@ If `main` moved while your PR is open:
 git switch main && git pull
 git switch feat/my-branch
 git merge main          # merge, not rebase, while the branch is pushed/shared
-# resolve conflicts, run pnpm ci, push
+# resolve conflicts, run pnpm run ci, push
 git push
 ```
 
@@ -94,7 +96,8 @@ git push
 
 ## Rules that protect us (set up in repo settings)
 
-- `main` requires a PR, 1 approval, passing CI, and resolved conversations.
+- Teammates need a PR, 1 approval, passing CI, and resolved conversations before `main`.
+- The repository owner can bypass review for direct `main` work; admin enforcement is off.
 - Force-pushes and branch deletion on `main` are blocked.
 - Only the repo owner manages collaborators and settings.
 
