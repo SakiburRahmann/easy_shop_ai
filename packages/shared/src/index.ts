@@ -35,8 +35,93 @@ const phoneSchema = z
 /* Shop                                                                       */
 /* -------------------------------------------------------------------------- */
 
-export const templateIdSchema = z.enum(['classic', 'modern']);
+export const templateIdSchema = z.enum(['classic', 'modern', 'boutique']);
 export type TemplateId = z.infer<typeof templateIdSchema>;
+
+/** Storefront layouts a seller can launch with. */
+export const STOREFRONT_TEMPLATES = {
+  classic: {
+    label: 'Classic',
+    description: 'A clean, dense catalog grid that puts products first.',
+  },
+  modern: {
+    label: 'Modern',
+    description: 'A bold hero banner with editorial product cards.',
+  },
+  boutique: {
+    label: 'Boutique',
+    description: 'A warm, centered boutique look with a serif display face.',
+  },
+} as const satisfies Record<TemplateId, { label: string; description: string }>;
+
+export const businessTypeSchema = z.enum([
+  'fashion',
+  'electronics',
+  'beauty',
+  'groceries',
+  'home',
+  'kids',
+  'other',
+]);
+export type BusinessType = z.infer<typeof businessTypeSchema>;
+
+/**
+ * Store-builder presets: every business type gets a starter category tree and
+ * a sensible default template. The API seeds these categories when a shop is
+ * created, so the AI has a real catalog structure from minute one.
+ */
+export const BUSINESS_TYPE_PRESETS = {
+  fashion: {
+    label: 'Fashion & apparel',
+    blurb: 'Clothing, sarees, panjabis and accessories',
+    categories: ['T-Shirts', 'Shirts', 'Sarees', 'Panjabi', 'Kids', 'Accessories'],
+    suggestedTemplate: 'modern',
+  },
+  electronics: {
+    label: 'Electronics',
+    blurb: 'Phones, audio, chargers and gadgets',
+    categories: ['Phones', 'Audio', 'Chargers', 'Accessories'],
+    suggestedTemplate: 'classic',
+  },
+  beauty: {
+    label: 'Beauty & care',
+    blurb: 'Skincare, makeup, haircare and fragrance',
+    categories: ['Skincare', 'Makeup', 'Haircare', 'Fragrance'],
+    suggestedTemplate: 'boutique',
+  },
+  groceries: {
+    label: 'Groceries',
+    blurb: 'Staples, snacks, beverages and household',
+    categories: ['Rice & staples', 'Snacks', 'Beverages', 'Household'],
+    suggestedTemplate: 'classic',
+  },
+  home: {
+    label: 'Home & living',
+    blurb: 'Kitchen, decor, bedding and storage',
+    categories: ['Kitchen', 'Decor', 'Bedding', 'Storage'],
+    suggestedTemplate: 'boutique',
+  },
+  kids: {
+    label: 'Kids & toys',
+    blurb: 'Clothing, toys and school supplies',
+    categories: ['Clothing', 'Toys', 'School'],
+    suggestedTemplate: 'modern',
+  },
+  other: {
+    label: 'Something else',
+    blurb: 'Start with a general store and shape it yourself',
+    categories: ['New arrivals', 'Best sellers', 'Accessories'],
+    suggestedTemplate: 'classic',
+  },
+} as const satisfies Record<
+  BusinessType,
+  {
+    label: string;
+    blurb: string;
+    categories: readonly string[];
+    suggestedTemplate: TemplateId;
+  }
+>;
 
 export const hexColorSchema = z.string().regex(/^#[0-9a-fA-F]{6}$/);
 export const deliveryZoneSchema = z.object({
@@ -44,12 +129,19 @@ export const deliveryZoneSchema = z.object({
   charge: moneySchema,
   etaDays: z.number().int().min(0).max(30),
 });
+export type DeliveryZone = z.infer<typeof deliveryZoneSchema>;
 export const shopContactSchema = z.object({
   phone: phoneSchema.optional(),
   email: z.email().optional(),
   facebook: z.string().max(200).optional(),
 });
-export const shopThemeSchema = z.object({ primaryColor: hexColorSchema.optional() }).catch({});
+export const shopThemeSchema = z
+  .object({
+    primaryColor: hexColorSchema.optional(),
+    accentColor: hexColorSchema.optional(),
+    font: z.enum(['sans', 'serif']).optional(),
+  })
+  .catch({});
 export const shopPoliciesSchema = z.object({
   returnPolicy: z.string().max(2000).optional(),
   notes: z.string().max(2000).optional(),
@@ -60,6 +152,7 @@ export const shopSchema = z.object({
   ownerId: uuidSchema,
   name: z.string().min(1).max(80),
   slug: shopSlugSchema,
+  businessType: businessTypeSchema,
   description: z.string().max(1000).nullish(),
   logoUrl: z.url().nullish(),
   templateId: templateIdSchema,
@@ -75,6 +168,7 @@ export type Shop = z.infer<typeof shopSchema>;
 
 export const shopCreateInputSchema = z.object({
   name: z.string().min(1).max(80),
+  businessType: businessTypeSchema.optional(),
   description: z.string().max(1000).optional(),
   templateId: templateIdSchema.optional(),
   theme: shopThemeSchema.optional(),
@@ -98,6 +192,7 @@ export const shopDirectoryItemSchema = z.object({
   id: uuidSchema,
   name: z.string().min(1).max(80),
   slug: shopSlugSchema,
+  businessType: businessTypeSchema,
   description: z.string().max(1000).nullish(),
   templateId: templateIdSchema,
   theme: shopThemeSchema,
@@ -111,6 +206,8 @@ export type ShopDirectoryItem = z.infer<typeof shopDirectoryItemSchema>;
 
 export const shopDirectoryQuerySchema = z.object({
   q: z.string().max(120).optional(),
+  /** Narrow the marketplace to one kind of business. */
+  businessType: businessTypeSchema.optional(),
   limit: z.number().int().min(1).max(50).default(24),
   offset: z.number().int().min(0).default(0),
 });
@@ -196,6 +293,11 @@ export const productSchema = z.object({
   price: moneySchema,
   /** Seller's confidential bargaining floor. Never exposed publicly. */
   floorPrice: moneySchema,
+  /**
+   * Stock for products sold without variants. Products WITH variants keep
+   * their inventory per variant and ignore this field.
+   */
+  stock: z.number().int().min(0).max(1_000_000),
   images: z.array(z.url().max(500)).max(8),
   active: z.boolean(),
   createdAt: isoDateTimeSchema,
@@ -222,6 +324,8 @@ export const productInputSchema = z.object({
   description: z.string().max(2000).optional(),
   price: moneySchema,
   floorPrice: moneySchema.optional(),
+  /** Stock used when the product has no variants (defaults to 0 on create). */
+  stock: z.number().int().min(0).max(1_000_000).optional(),
   images: z.array(z.url().max(500)).max(8).optional(),
   active: z.boolean().optional(),
   variants: z.array(variantInputSchema).max(30).optional(),
@@ -229,6 +333,23 @@ export const productInputSchema = z.object({
 export type ProductInput = z.infer<typeof productInputSchema>;
 export const productUpdateInputSchema = productInputSchema.partial();
 export type ProductUpdateInput = z.infer<typeof productUpdateInputSchema>;
+
+/**
+ * Customer-facing availability. Variant products sum their variants; plain
+ * products use their own stock. Shared by the storefront, checkout and the AI
+ * cards so every surface agrees on what "in stock" means.
+ */
+export function productAvailableStock(product: Pick<ProductPublic, 'stock' | 'variants'>): number {
+  return product.variants.length
+    ? product.variants.reduce((sum, variant) => sum + variant.stock, 0)
+    : product.stock;
+}
+
+/** True when a product cannot be ordered at all (no purchasable unit). */
+export function productSoldOut(product: Pick<ProductPublic, 'stock' | 'variants'>): boolean {
+  if (product.variants.length) return product.variants.every((variant) => variant.stock <= 0);
+  return product.stock <= 0;
+}
 
 export const productQuerySchema = z.object({
   q: z.string().max(120).optional(),
@@ -242,6 +363,48 @@ export const productQuerySchema = z.object({
   offset: z.number().int().min(0).default(0),
 });
 export type ProductQuery = z.infer<typeof productQuerySchema>;
+
+/* -------------------------------------------------------------------------- */
+/* Marketplace product search (cross-shop, public)                            */
+/* -------------------------------------------------------------------------- */
+
+/** A public product plus the shop that sells it, for marketplace results. */
+export const marketplaceProductSchema = z.object({
+  product: productPublicSchema,
+  shop: z.object({
+    id: uuidSchema,
+    name: z.string().min(1).max(80),
+    slug: shopSlugSchema,
+    businessType: businessTypeSchema,
+    templateId: templateIdSchema,
+    theme: shopThemeSchema,
+  }),
+  categoryName: z.string().max(60).nullish(),
+});
+export type MarketplaceProduct = z.infer<typeof marketplaceProductSchema>;
+
+export const marketplaceProductQuerySchema = z.object({
+  q: z.string().max(120).optional(),
+  category: z.string().max(60).optional(),
+  shopSlug: shopSlugSchema.optional(),
+  minPrice: z.coerce.number().min(0).max(10_000_000).optional(),
+  maxPrice: z.coerce.number().min(0).max(10_000_000).optional(),
+  sort: z.enum(['newest', 'price_asc', 'price_desc']).default('newest'),
+  limit: z.coerce.number().int().min(1).max(50).default(24),
+  offset: z.coerce.number().int().min(0).default(0),
+});
+export type MarketplaceProductQuery = z.infer<typeof marketplaceProductQuerySchema>;
+
+/** Public product detail, used by the storefront deep-link/order modal. */
+export const publicProductDetailSchema = z.object({
+  product: productPublicSchema,
+  shop: z.object({
+    id: uuidSchema,
+    name: z.string().min(1).max(80),
+    slug: shopSlugSchema,
+  }),
+});
+export type PublicProductDetail = z.infer<typeof publicProductDetailSchema>;
 
 /* -------------------------------------------------------------------------- */
 /* Orders                                                                     */
@@ -310,6 +473,8 @@ export const createOrderInputSchema = z.object({
     phone: phoneSchema,
     address: z.string().min(5).max(300),
   }),
+  /** Name of the seller-defined delivery zone. Required when the shop has zones. */
+  deliveryZone: z.string().min(1).max(60).optional(),
   note: z.string().max(500).optional(),
 });
 export type CreateOrderInput = z.infer<typeof createOrderInputSchema>;

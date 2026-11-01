@@ -6,16 +6,15 @@ import {
   categorySchema,
   storefrontSchema,
   productPublicSchema,
+  publicProductDetailSchema,
 } from '@easyshop/shared';
 import type { ApiBindings, EnvShape } from '../lib/env';
 import { notFound, param } from '../lib/validation';
+import { PUBLIC_PRODUCT_FIELDS } from '../lib/product-fields';
 import { iso, num, str, strOrNull, toCategory, toProductPublic, toShop } from '../lib/serialize';
 import { greetingFor } from '../lib/system-prompt';
 
 export const storefrontRoutes = new Hono<EnvShape>();
-
-const PUBLIC_PRODUCT_FIELDS =
-  'id, shop_id, category_id, name, description, price, images, active, created_at, updated_at, variants(id, product_id, size, color, stock, price_override, created_at)';
 
 /** Full storefront payload: shop + categories + first page of products + AI settings. */
 storefrontRoutes.get('/s/:slug', async (c) => {
@@ -84,7 +83,7 @@ storefrontRoutes.get('/s/:slug', async (c) => {
       greeting: greetingFor(shop),
     },
   });
-  return c.json(payload, { headers: { 'cache-control': 'public, max-age=30' } });
+  return c.json(payload, { headers: { 'cache-control': 'public, max-age=5' } });
 });
 
 /** Public, filterable catalog for a shop. */
@@ -134,15 +133,15 @@ storefrontRoutes.get('/s/:slug/products', async (c) => {
       toProductPublic(row, Array.isArray(r.variants) ? r.variants : []),
     );
   });
-  return c.json(list, { headers: { 'cache-control': 'public, max-age=30' } });
+  return c.json(list, { headers: { 'cache-control': 'public, max-age=5' } });
 });
 
-/** Public product detail (any shop's active product). */
+/** Public product detail (any shop's active product), used by deep links. */
 storefrontRoutes.get('/products/:productId', async (c) => {
   const db = c.get('db');
   const { data, error } = await db
     .from('products')
-    .select(`${PUBLIC_PRODUCT_FIELDS}, shops(id, slug)`)
+    .select(`${PUBLIC_PRODUCT_FIELDS}, shops(id, name, slug)`)
     .eq('id', param(c, 'productId'))
     .eq('active', true)
     .maybeSingle();
@@ -150,11 +149,9 @@ storefrontRoutes.get('/products/:productId', async (c) => {
   const r = data as Record<string, unknown>;
   const shop = r.shops as Record<string, unknown> | null;
   if (!shop) return notFound(c, 'Product');
-  const product = productPublicSchema.parse(
-    toProductPublic(data, Array.isArray(r.variants) ? r.variants : []),
-  );
-  return c.json(
-    { ...product, shopSlug: str(shop.slug) },
-    { headers: { 'cache-control': 'public, max-age=30' } },
-  );
+  const payload = publicProductDetailSchema.parse({
+    product: toProductPublic(data, Array.isArray(r.variants) ? r.variants : []),
+    shop: { id: str(shop.id), name: str(shop.name), slug: str(shop.slug) },
+  });
+  return c.json(payload, { headers: { 'cache-control': 'public, max-age=5' } });
 });

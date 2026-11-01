@@ -1,5 +1,5 @@
 import type { Metadata } from 'next';
-import { Hind_Siliguri, Inter } from 'next/font/google';
+import { Hind_Siliguri, Inter, Playfair_Display } from 'next/font/google';
 import './globals.css';
 
 /* Latin UI in Inter; every Bengali glyph falls back to Hind Siliguri —
@@ -16,6 +16,13 @@ const bangla = Hind_Siliguri({
   variable: '--font-bangla',
   weight: ['400', '500', '600', '700'],
 });
+/* Editorial display face used by the boutique template and serif themes. */
+const display = Playfair_Display({
+  subsets: ['latin'],
+  display: 'swap',
+  variable: '--font-display',
+  weight: ['500', '600', '700'],
+});
 
 export const metadata: Metadata = {
   title: 'EasyShopAI — a marketplace where every shop has an AI agent',
@@ -25,7 +32,10 @@ export const metadata: Metadata = {
 
 export default function RootLayout({ children }: LayoutProps<'/'>) {
   return (
-    <html lang="en" className={`${inter.variable} ${bangla.variable} h-full antialiased`}>
+    <html
+      lang="en"
+      className={`${inter.variable} ${bangla.variable} ${display.variable} h-full antialiased`}
+    >
       <body className="flex min-h-full flex-col font-sans">{children}</body>
     </html>
   );

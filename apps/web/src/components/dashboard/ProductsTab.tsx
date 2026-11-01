@@ -252,7 +252,9 @@ function ProductRow({
 }) {
   const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState(false);
-  const stock = product.variants.reduce((s, v) => s + v.stock, 0);
+  const stock = product.variants.length
+    ? product.variants.reduce((s, v) => s + v.stock, 0)
+    : product.stock;
 
   const patch = async (body: Record<string, unknown>) => {
     setBusy(true);
@@ -265,7 +267,12 @@ function ProductRow({
   };
 
   const remove = async () => {
-    if (!window.confirm(`Delete "${product.name}"? This cannot be undone.`)) return;
+    if (
+      !window.confirm(
+        `Delete "${product.name}"? Products with past orders are hidden instead of removed.`,
+      )
+    )
+      return;
     setBusy(true);
     try {
       await auth(`/products/${product.id}`, { method: 'DELETE' });
@@ -341,6 +348,7 @@ function ProductDetails({
   const [description, setDescription] = useState(product.description ?? '');
   const [price, setPrice] = useState(String(product.price));
   const [floor, setFloor] = useState(String(product.floorPrice));
+  const [stock, setStock] = useState(String(product.stock));
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [adding, setAdding] = useState({ size: '', color: '', stock: '1' });
@@ -356,6 +364,7 @@ function ProductDetails({
           description,
           price: Number(price),
           floorPrice: Number(floor),
+          stock: Number(stock),
         },
       });
       onDone();
@@ -422,7 +431,7 @@ function ProductDetails({
     }
   };
 
-  const setStock = async (id: string, stock: number) => {
+  const updateVariantStock = async (id: string, stock: number) => {
     setBusy(true);
     try {
       await auth(`/variants/${id}`, { method: 'PATCH', body: { stock: Math.max(0, stock) } });
@@ -453,8 +462,18 @@ function ProductDetails({
             className={inputClass}
           />
         </Field>
-        <Field label="Stock action" hint="Adjust per variant below">
-          <div className="h-[38px]" />
+        <Field
+          label="Stock"
+          hint={product.variants.length ? 'Managed per variant below' : 'Units customers can order'}
+        >
+          <input
+            value={stock}
+            onChange={(e) => setStock(e.target.value)}
+            type="number"
+            min={0}
+            className={inputClass}
+            disabled={product.variants.length > 0}
+          />
         </Field>
       </div>
       <Field label="Description">
@@ -508,7 +527,7 @@ function ProductDetails({
                   className={`${inputClass} w-20`}
                   onBlur={(e) => {
                     const n = Number(e.target.value);
-                    if (n !== v.stock && n >= 0) void setStock(v.id, n);
+                    if (n !== v.stock && n >= 0) void updateVariantStock(v.id, n);
                   }}
                 />
                 {v.priceOverride !== null && v.priceOverride !== undefined ? (
@@ -580,6 +599,7 @@ function CreateProductModal({
     name: '',
     price: '',
     floor: '',
+    stock: '10',
     description: '',
     categoryId: '',
   });
@@ -593,6 +613,7 @@ function CreateProductModal({
       name: form.name,
       price: Number(form.price),
       ...(form.floor ? { floorPrice: Number(form.floor) } : {}),
+      stock: Number(form.stock) || 0,
       ...(form.description ? { description: form.description } : {}),
       ...(form.categoryId ? { categoryId: form.categoryId } : {}),
       active: true,
@@ -606,7 +627,7 @@ function CreateProductModal({
           await auth<unknown>(`/shops/${shop.id}/products`, { body: input }),
         ),
       );
-      setForm({ name: '', price: '', floor: '', description: '', categoryId: '' });
+      setForm({ name: '', price: '', floor: '', stock: '10', description: '', categoryId: '' });
       setVariants([]);
     } catch (e2) {
       setErr(e2 instanceof Error ? e2.message : 'Create failed');
@@ -627,7 +648,7 @@ function CreateProductModal({
             maxLength={120}
           />
         </Field>
-        <div className="grid gap-3 sm:grid-cols-2">
+        <div className="grid gap-3 sm:grid-cols-3">
           <Field label="Price (৳)">
             <input
               type="number"
@@ -645,6 +666,19 @@ function CreateProductModal({
               value={form.floor}
               onChange={(e) => setForm((f) => ({ ...f, floor: e.target.value }))}
               className={inputClass}
+            />
+          </Field>
+          <Field
+            label="Stock"
+            hint={variants.length ? 'Ignored — variants track stock' : 'Units available'}
+          >
+            <input
+              type="number"
+              min={0}
+              value={form.stock}
+              onChange={(e) => setForm((f) => ({ ...f, stock: e.target.value }))}
+              className={inputClass}
+              disabled={variants.length > 0}
             />
           </Field>
         </div>

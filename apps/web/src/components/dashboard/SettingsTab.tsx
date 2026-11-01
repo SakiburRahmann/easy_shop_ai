@@ -1,19 +1,30 @@
 'use client';
 
-/** Shop settings (profile, contact, theme) and AI assistant settings. */
+/** Store design, delivery, profile and AI assistant settings. */
 import { useEffect, useState, type FormEvent } from 'react';
 import {
+  BUSINESS_TYPE_PRESETS,
   aiSettingsSchema,
   aiSettingsUpdateInputSchema,
-  type AiSettings,
   shopSchema,
-  type Shop,
   shopUpdateInputSchema,
   uploadResultSchema,
+  type AiSettings,
+  type BusinessType,
+  type DeliveryZone,
+  type Shop,
+  type TemplateId,
 } from '@easyshop/shared';
 import { Badge, Button, ErrorNote, Field, OkNote, inputClass } from '@/components/ui';
 import { Icon } from '@/lib/icons';
 import type { Api } from './Dashboard';
+import {
+  DeliveryZoneEditor,
+  MiniStorePreview,
+  TemplatePicker,
+  ThemeControls,
+  type ThemeValue,
+} from './store-builder';
 
 export default function SettingsTab({
   auth,
@@ -27,6 +38,7 @@ export default function SettingsTab({
   return (
     <div className="flex flex-col gap-6">
       <ShopSettings auth={auth} shop={shop} onShopChange={onShopChange} />
+      <DeliverySettings auth={auth} shop={shop} onShopChange={onShopChange} />
       <AiSettingsCard auth={auth} shop={shop} />
     </div>
   );
@@ -47,7 +59,13 @@ function ShopSettings({
   const [phone, setPhone] = useState(shop.contact.phone ?? '');
   const [email, setEmail] = useState(shop.contact.email ?? '');
   const [facebook, setFacebook] = useState(shop.contact.facebook ?? '');
-  const [color, setColor] = useState(shop.theme.primaryColor ?? '#059669');
+  const [businessType, setBusinessType] = useState<BusinessType>(shop.businessType);
+  const [templateId, setTemplateId] = useState<TemplateId>(shop.templateId);
+  const [theme, setTheme] = useState<ThemeValue>({
+    primaryColor: shop.theme.primaryColor ?? '#059669',
+    accentColor: shop.theme.accentColor ?? '#F59E0B',
+    font: shop.theme.font ?? 'sans',
+  });
   const [returnPolicy, setReturnPolicy] = useState(shop.policies.returnPolicy ?? '');
   const [notes, setNotes] = useState(shop.policies.notes ?? '');
   const [busy, setBusy] = useState(false);
@@ -58,13 +76,19 @@ function ShopSettings({
     e.preventDefault();
     const input = shopUpdateInputSchema.safeParse({
       name,
+      businessType,
       description,
+      templateId,
+      theme: {
+        primaryColor: theme.primaryColor,
+        accentColor: theme.accentColor,
+        font: theme.font,
+      },
       contact: {
         ...(phone ? { phone } : {}),
         ...(email ? { email } : {}),
         ...(facebook ? { facebook } : {}),
       },
-      theme: { primaryColor: color },
       policies: {
         ...(returnPolicy ? { returnPolicy } : {}),
         ...(notes ? { notes } : {}),
@@ -84,7 +108,7 @@ function ShopSettings({
           await auth<unknown>(`/shops/${shop.id}`, { method: 'PATCH', body: input.data }),
         ),
       );
-      setOk('Saved.');
+      setOk('Store design saved — your storefront is updated.');
     } catch (e2) {
       setErr(e2 instanceof Error ? e2.message : 'Save failed');
     } finally {
@@ -108,7 +132,7 @@ function ShopSettings({
         }),
       );
       setLogoUrl(res.url);
-      setOk('Logo uploaded — press “Save shop” to apply it.');
+      setOk('Logo uploaded — press “Save store” to apply it.');
     } catch (e2) {
       setErr(e2 instanceof Error ? e2.message : 'Upload failed (image must be < 4.5 MB)');
     } finally {
@@ -116,27 +140,63 @@ function ShopSettings({
     }
   };
 
+  const preset = BUSINESS_TYPE_PRESETS[businessType];
+
   return (
     <form
       onSubmit={save}
-      className="flex flex-col gap-4 rounded-2xl border border-zinc-200 bg-white p-6"
+      className="flex flex-col gap-5 rounded-2xl border border-zinc-200 bg-white p-6"
     >
       <div className="flex flex-wrap items-center gap-3">
         <h2 className="flex items-center gap-2 text-lg font-semibold tracking-tight">
           <span className="flex h-8 w-8 items-center justify-center rounded-xl bg-brand-50 text-brand-600">
             <Icon.Palette size={15} />
           </span>
-          Shop
+          Store design
         </h2>
-        {shop.deliveryRules.zones.length ? (
-          <div className="flex flex-wrap gap-1">
-            {shop.deliveryRules.zones.map((z) => (
-              <Badge key={z.name} icon={<Icon.Truck size={11} />}>
-                {z.name} · {z.charge} ৳ · {z.etaDays}d
-              </Badge>
-            ))}
-          </div>
-        ) : null}
+        <Badge tone="green" icon={<Icon.Check size={11} />}>
+          live
+        </Badge>
+      </div>
+
+      <Field label="Business type" hint="Shown on your marketplace card and used to brief the AI">
+        <select
+          value={businessType}
+          onChange={(e) => setBusinessType(e.target.value as BusinessType)}
+          className={inputClass}
+        >
+          {(Object.keys(BUSINESS_TYPE_PRESETS) as BusinessType[]).map((key) => (
+            <option key={key} value={key}>
+              {BUSINESS_TYPE_PRESETS[key].label}
+            </option>
+          ))}
+        </select>
+      </Field>
+
+      <div>
+        <p className="text-[13px] font-medium text-zinc-700">Storefront template</p>
+        <p className="mb-2 text-xs text-zinc-400">
+          Classic, modern or boutique. Switching keeps every product, order and chat.
+        </p>
+        <TemplatePicker
+          value={templateId}
+          onChange={setTemplateId}
+          primary={theme.primaryColor}
+          accent={theme.accentColor}
+        />
+      </div>
+
+      <ThemeControls value={theme} onChange={setTheme} />
+
+      <div>
+        <p className="mb-2 text-[13px] font-medium text-zinc-700">Live preview</p>
+        <MiniStorePreview
+          name={name}
+          description={description}
+          templateId={templateId}
+          theme={theme}
+          categories={preset.categories}
+        />
       </div>
 
       <div className="grid gap-4 sm:grid-cols-2">
@@ -168,6 +228,7 @@ function ShopSettings({
           </div>
         </Field>
       </div>
+
       <Field label="Description">
         <textarea
           value={description}
@@ -177,6 +238,7 @@ function ShopSettings({
           className={inputClass}
         />
       </Field>
+
       <div className="grid gap-4 sm:grid-cols-3">
         <Field label="Contact phone">
           <input value={phone} onChange={(e) => setPhone(e.target.value)} className={inputClass} />
@@ -192,6 +254,7 @@ function ShopSettings({
           />
         </Field>
       </div>
+
       <div className="grid gap-4 sm:grid-cols-2">
         <Field label="Logo" hint="Shows in the storefront header (square works best)">
           <div className="flex items-center gap-2.5">
@@ -223,30 +286,16 @@ function ShopSettings({
             ) : null}
           </div>
         </Field>
-        <Field label="Theme color" hint="Storefront header + chat accent">
-          <div className="flex items-center gap-2">
-            <input
-              type="color"
-              value={color}
-              onChange={(e) => setColor(e.target.value)}
-              className="h-9 w-12 cursor-pointer rounded border border-zinc-300"
-            />
-            <input
-              value={color}
-              onChange={(e) => setColor(e.target.value)}
-              className={`${inputClass} font-mono`}
-            />
-          </div>
+        <Field label="Storefront notes" hint="Shown at the bottom of your store">
+          <input
+            value={notes}
+            onChange={(e) => setNotes(e.target.value)}
+            maxLength={2000}
+            className={inputClass}
+          />
         </Field>
       </div>
-      <Field label="Storefront notes">
-        <input
-          value={notes}
-          onChange={(e) => setNotes(e.target.value)}
-          maxLength={2000}
-          className={inputClass}
-        />
-      </Field>
+
       <Field label="Return policy">
         <textarea
           value={returnPolicy}
@@ -259,12 +308,87 @@ function ShopSettings({
 
       <div className="flex items-center gap-3">
         <Button type="submit" disabled={busy}>
-          {busy ? 'Saving…' : 'Save shop'}
+          {busy ? 'Saving…' : 'Save store'}
         </Button>
         <OkNote message={ok} />
       </div>
       <ErrorNote message={err} />
     </form>
+  );
+}
+
+function DeliverySettings({
+  auth,
+  shop,
+  onShopChange,
+}: {
+  auth: Api;
+  shop: Shop;
+  onShopChange: (shop: Shop) => void;
+}) {
+  const [zones, setZones] = useState<DeliveryZone[]>(shop.deliveryRules.zones);
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+  const [ok, setOk] = useState<string | null>(null);
+
+  const save = async () => {
+    const cleaned = zones
+      .filter((zone) => zone.name.trim())
+      .map((zone) => ({ ...zone, name: zone.name.trim() }));
+    if (new Set(cleaned.map((z) => z.name.toLowerCase())).size !== cleaned.length) {
+      setErr('Delivery zone names must be unique');
+      return;
+    }
+    const input = shopUpdateInputSchema.safeParse({ deliveryRules: { zones: cleaned } });
+    if (!input.success) {
+      setErr(input.error.issues[0]?.message ?? 'Invalid delivery zones');
+      return;
+    }
+    setBusy(true);
+    setErr(null);
+    setOk(null);
+    try {
+      onShopChange(
+        shopSchema.parse(
+          await auth<unknown>(`/shops/${shop.id}`, { method: 'PATCH', body: input.data }),
+        ),
+      );
+      setZones(cleaned);
+      setOk('Delivery zones saved. The AI and checkout use these charges.');
+    } catch (e2) {
+      setErr(e2 instanceof Error ? e2.message : 'Save failed');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div className="flex flex-col gap-4 rounded-2xl border border-zinc-200 bg-white p-6">
+      <div className="flex flex-wrap items-center gap-2">
+        <h2 className="flex items-center gap-2 text-lg font-semibold tracking-tight">
+          <span className="flex h-8 w-8 items-center justify-center rounded-xl bg-brand-50 text-brand-600">
+            <Icon.Truck size={15} />
+          </span>
+          Delivery
+        </h2>
+        <Badge tone={zones.length ? 'green' : 'amber'}>
+          {zones.length ? `${zones.length} zones` : 'not configured'}
+        </Badge>
+      </div>
+      <p className="text-xs leading-relaxed text-zinc-500">
+        Customers pick a zone at checkout and the AI quotes these exact charges. If you leave this
+        empty, orders have no delivery fee and the AI tells customers the charge is confirmed by the
+        shop.
+      </p>
+      <DeliveryZoneEditor zones={zones} onChange={setZones} />
+      <div className="flex items-center gap-3">
+        <Button onClick={() => void save()} disabled={busy}>
+          {busy ? 'Saving…' : 'Save delivery'}
+        </Button>
+        <OkNote message={ok} />
+      </div>
+      <ErrorNote message={err} />
+    </div>
   );
 }
 

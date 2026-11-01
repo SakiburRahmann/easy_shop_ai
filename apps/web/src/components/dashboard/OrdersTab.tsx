@@ -166,6 +166,14 @@ export default function OrdersTab({ auth, shop }: { auth: Api; shop: Shop }) {
                 <span className="text-zinc-500">{o.customerAddress}</span>
               </div>
               <ul className="mt-2 flex flex-col gap-1 border-t border-zinc-100 pt-2 text-xs">
+                {o.deliveryCharge > 0 ? (
+                  <li className="flex items-center justify-between text-zinc-500">
+                    <span className="flex items-center gap-1.5">
+                      <Icon.Truck size={12} /> Delivery
+                    </span>
+                    <span>{taka(o.deliveryCharge)}</span>
+                  </li>
+                ) : null}
                 {o.items.map((it) => (
                   <li key={it.id} className="flex items-center gap-2">
                     {it.image ? (

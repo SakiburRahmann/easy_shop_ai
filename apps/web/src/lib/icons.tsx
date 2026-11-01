@@ -220,4 +220,52 @@ export const Icon = {
       <path d="M12 16h.01" />
     </Base>
   ),
+  Heart: (p: P) => (
+    <Base {...p}>
+      <path d="M19 14c1.5-1.5 3-3.4 3-5.5A5 5 0 0 0 12 5.5 5 5 0 0 0 2 8.5C2 12.5 7 16 12 21c5-5 7-7 7-7" />
+    </Base>
+  ),
+  Home: (p: P) => (
+    <Base {...p}>
+      <path d="m3 10 9-7 9 7v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
+      <path d="M9 22V12h6v10" />
+    </Base>
+  ),
+  Leaf: (p: P) => (
+    <Base {...p}>
+      <path d="M11 20A7 7 0 0 1 9.8 6.1C15.5 5 17 4.48 19 2c1 2 2 4.18 2 8a7 7 0 0 1-7 7z" />
+      <path d="M2 21c0-3 1.85-5.36 5.08-6" />
+    </Base>
+  ),
+  Shirt: (p: P) => (
+    <Base {...p}>
+      <path d="M20 7 16 3H8L4 7l2 3 2-1v11h8V9l2 1z" />
+      <path d="M8 3a4 4 0 0 0 8 0" />
+    </Base>
+  ),
+  Laptop: (p: P) => (
+    <Base {...p}>
+      <rect x="3" y="4" width="18" height="12" rx="2" />
+      <path d="M2 20h20" />
+    </Base>
+  ),
+  Smiley: (p: P) => (
+    <Base {...p}>
+      <circle cx="12" cy="12" r="10" />
+      <path d="M8 14s1.5 2 4 2 4-2 4-2" />
+      <path d="M9 9h.01" />
+      <path d="M15 9h.01" />
+    </Base>
+  ),
+  MapPin: (p: P) => (
+    <Base {...p}>
+      <path d="M20 10c0 6-8 12-8 12S4 16 4 10a8 8 0 0 1 16 0" />
+      <circle cx="12" cy="10" r="3" />
+    </Base>
+  ),
+  Star: (p: P) => (
+    <Base {...p}>
+      <path d="m12 2 3.1 6.3 6.9 1-5 4.9 1.2 6.8-6.2-3.3L5.8 21 7 14.2 2 9.3l6.9-1z" />
+    </Base>
+  ),
 };

@@ -14,6 +14,7 @@ import { shopRoutes } from './routes/shops';
 import { catalogRoutes } from './routes/catalog';
 import { orderRoutes } from './routes/orders';
 import { storefrontRoutes } from './routes/storefront';
+import { marketplaceRoutes } from './routes/marketplace';
 import { chatRoutes } from './routes/chat';
 
 export function createApp(): Hono<EnvShape> {
@@ -56,6 +57,7 @@ export function createApp(): Hono<EnvShape> {
   app.route('/', catalogRoutes);
   app.route('/', orderRoutes);
   app.route('/', storefrontRoutes);
+  app.route('/', marketplaceRoutes);
   app.route('/', chatRoutes);
 
   app.notFound((c) => c.json({ error: 'Not found' }, 404));
