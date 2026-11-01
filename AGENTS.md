@@ -55,5 +55,6 @@ npx expo install <pkg>      # inside apps/mobile, for any new mobile dependency
 10. **Tests:** Vitest for `apps/api` and `packages/shared`. Every endpoint and every AI tool gets
     tests; AI behavior changes are verified against the test-conversation file (Bangla, English,
     Banglish) once it exists.
-11. **Git discipline:** work on a branch, Conventional Commit messages, open a PR. Never push to
-    `main` — even if asked to "just commit", create a branch and PR instead.
+11. **Git discipline:** use Conventional Commit messages. The repository owner works directly on
+    `main`. Teammates and AI agents must use a branch and open a PR unless the owner explicitly
+    authorizes a direct `main` change. Never force-push `main`.
