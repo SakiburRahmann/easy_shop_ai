@@ -755,6 +755,7 @@ function ProductModal({
   const chosen = variantOf(product, variantId);
   const needsVariant = product.variants.length > 0;
   const soldOut = productSoldOut(product);
+  const totalAvailable = productAvailableStock(product);
   const max = needsVariant ? (chosen?.stock ?? 0) : product.stock;
   const unit = chosen?.priceOverride ?? product.price;
   const canBuy = !soldOut && (!needsVariant || Boolean(chosen)) && max > 0;
@@ -786,7 +787,9 @@ function ProductModal({
             {soldOut ? (
               <span className="text-xs font-medium text-red-500">Sold out</span>
             ) : (
-              <span className="text-[11px] text-zinc-400">{max} available</span>
+              <span className="text-[11px] text-zinc-400">
+                {needsVariant && !chosen ? totalAvailable : max} available
+              </span>
             )}
           </div>
           <p className="flex items-center gap-1.5 text-xs text-brand-700">
