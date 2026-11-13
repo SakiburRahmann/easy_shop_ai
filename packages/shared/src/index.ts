@@ -42,15 +42,16 @@ export type TemplateId = z.infer<typeof templateIdSchema>;
 export const STOREFRONT_TEMPLATES = {
   classic: {
     label: 'Classic',
-    description: 'A clean, dense catalog grid that puts products first.',
+    description: 'Catalog-first: a dense retail bar and an even product grid, no hero.',
   },
   modern: {
     label: 'Modern',
-    description: 'A bold hero banner with editorial product cards.',
+    description: 'Collage: a full-bleed hero, category mosaic, product rail and gallery grid.',
   },
   boutique: {
     label: 'Boutique',
-    description: 'A warm, centered boutique look with a serif display face.',
+    description:
+      'Editorial: a centred serif masthead, oversized hero and roomy two-column catalog.',
   },
 } as const satisfies Record<TemplateId, { label: string; description: string }>;
 

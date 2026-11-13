@@ -1,0 +1,3 @@
+# Cloudflare Pages: the static export writes /s.html, while the storefront
+# reads /s/<slug> from the browser URL. Keep deep links on the shell.
+/s/* /s.html 200

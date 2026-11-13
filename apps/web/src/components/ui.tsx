@@ -1,6 +1,6 @@
 'use client';
 
-import type { ReactNode } from 'react';
+import { useEffect, type ReactNode } from 'react';
 import { Icon } from '@/lib/icons';
 
 export function Spinner({ label }: { label?: string }) {
@@ -14,6 +14,27 @@ export function Spinner({ label }: { label?: string }) {
 
 export function Skeleton({ className = '' }: { className?: string }) {
   return <div className={`skeleton ${className}`} />;
+}
+
+/**
+ * Prevent the page behind a fixed overlay from scrolling. A module-level
+ * counter keeps nested overlays (product modal + cart) from fighting over the
+ * body's previous overflow value.
+ */
+let scrollLockCount = 0;
+let previousBodyOverflow = '';
+
+export function useBodyScrollLock(active: boolean) {
+  useEffect(() => {
+    if (!active) return;
+    if (scrollLockCount === 0) previousBodyOverflow = document.body.style.overflow;
+    scrollLockCount += 1;
+    document.body.style.overflow = 'hidden';
+    return () => {
+      scrollLockCount = Math.max(0, scrollLockCount - 1);
+      if (scrollLockCount === 0) document.body.style.overflow = previousBodyOverflow;
+    };
+  }, [active]);
 }
 
 export function CardSkeletonGrid({ count = 8 }: { count?: number }) {
@@ -138,6 +159,7 @@ export function Modal({
   children: ReactNode;
   wide?: boolean;
 }) {
+  useBodyScrollLock(open);
   if (!open) return null;
   return (
     <div
@@ -145,7 +167,7 @@ export function Modal({
       onClick={onClose}
     >
       <div
-        className={`pop-in max-h-[92vh] w-full overflow-y-auto rounded-t-3xl bg-white shadow-2xl sm:rounded-3xl ${
+        className={`pop-in max-h-[92vh] w-full overflow-y-auto overscroll-contain rounded-t-3xl bg-white shadow-2xl sm:rounded-3xl ${
           wide ? 'sm:max-w-2xl' : 'sm:max-w-md'
         }`}
         onClick={(e) => e.stopPropagation()}

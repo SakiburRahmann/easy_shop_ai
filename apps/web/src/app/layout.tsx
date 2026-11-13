@@ -1,5 +1,5 @@
 import type { Metadata } from 'next';
-import { Hind_Siliguri, Inter, Playfair_Display } from 'next/font/google';
+import { Bricolage_Grotesque, Hind_Siliguri, Instrument_Serif, Inter } from 'next/font/google';
 import './globals.css';
 
 /* Latin UI in Inter; every Bengali glyph falls back to Hind Siliguri —
@@ -17,11 +17,19 @@ const bangla = Hind_Siliguri({
   weight: ['400', '500', '600', '700'],
 });
 /* Editorial display face used by the boutique template and serif themes. */
-const display = Playfair_Display({
+const display = Instrument_Serif({
   subsets: ['latin'],
   display: 'swap',
   variable: '--font-display',
-  weight: ['500', '600', '700'],
+  weight: ['400'],
+  style: ['normal', 'italic'],
+});
+/* Characterful grotesque for the modern template's oversized headlines. */
+const grotesque = Bricolage_Grotesque({
+  subsets: ['latin'],
+  display: 'swap',
+  variable: '--font-grotesque',
+  weight: ['400', '500', '600', '700'],
 });
 
 export const metadata: Metadata = {
@@ -34,7 +42,7 @@ export default function RootLayout({ children }: LayoutProps<'/'>) {
   return (
     <html
       lang="en"
-      className={`${inter.variable} ${bangla.variable} ${display.variable} h-full antialiased`}
+      className={`${inter.variable} ${bangla.variable} ${display.variable} ${grotesque.variable} h-full antialiased`}
     >
       <body className="flex min-h-full flex-col font-sans">{children}</body>
     </html>

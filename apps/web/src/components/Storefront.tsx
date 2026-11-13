@@ -20,7 +20,7 @@ import {
   type Shop,
   type Storefront as StorefrontPayload,
 } from '@easyshop/shared';
-import { api, streamChat, taka, visitorId } from '@/lib/api';
+import { ApiError, api, streamChat, taka, visitorId } from '@/lib/api';
 import { Icon } from '@/lib/icons';
 import {
   Button,
@@ -30,8 +30,24 @@ import {
   Modal,
   Skeleton,
   inputClass,
+  useBodyScrollLock,
 } from '@/components/ui';
 import { TEMPLATE_VISUALS, storefrontFont } from '@/components/storefront/templates';
+import { decorFor } from '@/components/storefront/decor';
+import { StorefrontHeader } from '@/components/storefront/header';
+import { StorefrontCatalog } from '@/components/storefront/catalog';
+import {
+  AnnouncementBar,
+  CategoryCollage,
+  CategoryIndex,
+  CollageHero,
+  EditorialHero,
+  FeaturedRail,
+  IntroStrip,
+  PoliciesSection,
+  StoryBand,
+  TrustRow,
+} from '@/components/storefront/sections';
 
 interface StoreRoute {
   slug: string;
@@ -102,7 +118,9 @@ export default function Storefront() {
   const [data, setData] = useState<StorefrontPayload | null>(null);
   const [loading, setLoading] = useState(true);
   const [notFound, setNotFound] = useState(false);
+  const [loadError, setLoadError] = useState(false);
   const [buyTarget, setBuyTarget] = useState<ProductPublic | null>(null);
+  const [categoryId, setCategoryId] = useState<string | undefined>(undefined);
   const [cart, setCart] = useState<CartLine[]>(() => readCart(route.slug));
   const [cartOpen, setCartOpen] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
@@ -185,7 +203,11 @@ export default function Storefront() {
         if (parsed.success) setData(parsed.data);
         else setNotFound(true);
       })
-      .catch(() => setNotFound(true))
+      .catch((error) => {
+        if (cancelled) return;
+        if (error instanceof ApiError && error.status === 404) setNotFound(true);
+        else setLoadError(true);
+      })
       .finally(() => !cancelled && setLoading(false));
     return () => {
       cancelled = true;
@@ -235,129 +257,184 @@ export default function Storefront() {
     );
   }
 
-  if (notFound || !data) {
+  if (notFound || loadError || !data) {
     return (
       <div className="flex flex-1 flex-col items-center justify-center gap-3 p-10 text-center">
         <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-brand-50 text-brand-600">
           <Icon.Store size={22} />
         </div>
-        <h1 className="text-lg font-semibold">Shop not found</h1>
-        <p className="text-sm text-zinc-500">No storefront lives at this address.</p>
-        <Link
-          href="/"
-          className="flex items-center gap-1.5 text-sm font-medium text-brand-600 hover:underline"
-        >
-          <Icon.ArrowLeft size={14} />
-          Back to the marketplace
-        </Link>
+        <h1 className="text-lg font-semibold">
+          {loadError ? 'Shop unavailable' : 'Shop not found'}
+        </h1>
+        <p className="max-w-sm text-sm text-zinc-500">
+          {loadError
+            ? 'We could not reach this store. Check the API connection and try again.'
+            : 'No storefront lives at this address.'}
+        </p>
+        {loadError ? (
+          <Button onClick={() => window.location.reload()}>Try again</Button>
+        ) : (
+          <Link
+            href="/"
+            className="flex items-center gap-1.5 text-sm font-medium text-brand-600 hover:underline"
+          >
+            <Icon.ArrowLeft size={14} />
+            Back to the marketplace
+          </Link>
+        )}
       </div>
     );
   }
 
-  const visuals = TEMPLATE_VISUALS[data.shop.templateId];
+  const preset = TEMPLATE_VISUALS[data.shop.templateId];
   const primary = data.shop.theme.primaryColor ?? '#059669';
   const accent = data.shop.theme.accentColor ?? '#F59E0B';
-  const font = storefrontFont(data.shop.theme.font ?? visuals.defaultFont);
+  const font = storefrontFont(data.shop.theme.font, preset.display);
+  const ink = preset.ink;
+  const muted = preset.muted;
+  const decor = decorFor(data.shop);
+
+  const pickCategory = (next?: string) => {
+    setCategoryId(next);
+    document.getElementById('catalog')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  };
 
   return (
-    <div className="flex min-h-full flex-1 flex-col" style={{ backgroundColor: visuals.surface }}>
+    <div
+      className="flex min-h-full flex-1 flex-col"
+      style={{ backgroundColor: preset.surface, color: ink }}
+    >
       <StorefrontHeader
         data={data}
+        preset={preset}
         primary={primary}
-        accent={accent}
         font={font}
-        centered={visuals.header === 'centered'}
+        ink={ink}
+        muted={muted}
         cartUnits={cartUnits}
         onCart={() => setCartOpen(true)}
+        onPick={pickCategory}
       />
 
-      {visuals.hero === 'gradient' ? (
-        <section
-          className="mx-auto mt-6 w-full max-w-5xl overflow-hidden rounded-3xl px-8 py-12 text-white shadow-lg"
-          style={{
-            background: `linear-gradient(125deg, ${primary} 0%, ${accent} 55%, #17181a 100%)`,
-          }}
-        >
-          <span className="inline-flex items-center gap-1.5 rounded-full bg-white/15 px-3 py-1 text-xs font-medium backdrop-blur">
-            <Icon.Spark size={12} /> {data.shop.name} · new collection
-          </span>
-          <h2 className="mt-4 max-w-xl text-3xl font-bold leading-snug tracking-tight">
-            {data.shop.description || 'Explore our latest collection — curated for you.'}
-          </h2>
-          <p className="mt-2 max-w-md text-sm text-white/75">
-            Ask the AI agent anything — prices, sizes, stock, delivery. Cash on delivery.
-          </p>
-        </section>
-      ) : null}
+      {preset.sections.map((section) => {
+        switch (section) {
+          case 'announcement':
+            return <AnnouncementBar key="announcement" shop={data.shop} primary={primary} />;
+          case 'intro':
+            return (
+              <IntroStrip
+                key="intro"
+                shop={data.shop}
+                products={data.products}
+                decor={decor}
+                primary={primary}
+                ink={ink}
+                muted={muted}
+                font={font}
+              />
+            );
+          case 'hero':
+            return preset.hero === 'collage' ? (
+              <CollageHero
+                key="hero"
+                shop={data.shop}
+                products={data.products}
+                decor={decor}
+                primary={primary}
+                font={font}
+              />
+            ) : (
+              <EditorialHero
+                key="hero"
+                shop={data.shop}
+                products={data.products}
+                decor={decor}
+                primary={primary}
+                ink={ink}
+                muted={muted}
+                font={font}
+              />
+            );
+          case 'categoryCollage':
+            return (
+              <CategoryCollage
+                key="categoryCollage"
+                categories={data.categories}
+                products={data.products}
+                ink={ink}
+                muted={muted}
+                font={font}
+                onPick={pickCategory}
+              />
+            );
+          case 'categoryIndex':
+            return (
+              <CategoryIndex
+                key="categoryIndex"
+                categories={data.categories}
+                products={data.products}
+                ink={ink}
+                muted={muted}
+                font={font}
+                onPick={pickCategory}
+              />
+            );
+          case 'rail':
+            return (
+              <FeaturedRail
+                key="rail"
+                products={data.products}
+                primary={primary}
+                ink={ink}
+                muted={muted}
+                font={font}
+                onOpen={openBuy}
+                onViewAll={() => pickCategory(undefined)}
+              />
+            );
+          case 'catalog':
+            return (
+              <StorefrontCatalog
+                key="catalog"
+                data={data}
+                slug={route.slug}
+                preset={preset}
+                primary={primary}
+                font={font}
+                ink={ink}
+                muted={muted}
+                categoryId={categoryId}
+                onCategory={pickCategory}
+                onBuy={openBuy}
+              />
+            );
+          case 'story':
+            return (
+              <StoryBand key="story" shop={data.shop} decor={decor} primary={primary} font={font} />
+            );
+          case 'trust':
+            return (
+              <TrustRow key="trust" shop={data.shop} primary={primary} ink={ink} muted={muted} />
+            );
+          case 'policies':
+            return (
+              <PoliciesSection
+                key="policies"
+                shop={data.shop}
+                ink={ink}
+                muted={muted}
+                font={font}
+              />
+            );
+          default:
+            return null;
+        }
+      })}
 
-      {visuals.hero === 'editorial' ? (
-        <section className="mx-auto mt-7 grid w-full max-w-5xl gap-6 px-5 sm:grid-cols-[1.15fr_0.85fr] sm:items-center">
-          <div>
-            <p
-              className="text-[11px] font-semibold uppercase tracking-[0.25em]"
-              style={{ color: primary }}
-            >
-              {data.shop.name}
-            </p>
-            <h2
-              className="mt-3 max-w-xl text-4xl font-semibold leading-[1.12] tracking-tight text-zinc-900"
-              style={{ fontFamily: font }}
-            >
-              {data.shop.description || 'Beautiful things, chosen with care.'}
-            </h2>
-            <p className="mt-3 max-w-md text-sm leading-relaxed text-zinc-500">
-              Browse the collection, or ask the AI agent to find something for you in বাংলা, English
-              or Banglish.
-            </p>
-            {data.categories.length ? (
-              <div className="mt-4 flex flex-wrap gap-1.5">
-                {data.categories.slice(0, 4).map((category) => (
-                  <span
-                    key={category.id}
-                    className="rounded-full border border-black/10 bg-white/70 px-3 py-1 text-[11px] font-medium text-zinc-600"
-                  >
-                    {category.name}
-                  </span>
-                ))}
-              </div>
-            ) : null}
-          </div>
-          <div
-            className="relative flex aspect-[4/3] items-center justify-center overflow-hidden rounded-[2rem]"
-            style={{
-              background: `radial-gradient(circle at 30% 25%, ${accent}55, transparent 60%), ${primary}1a`,
-              border: `1px solid ${primary}22`,
-            }}
-          >
-            <div
-              className="flex h-24 w-24 items-center justify-center rounded-full text-3xl font-semibold text-white shadow-xl"
-              style={{ backgroundColor: primary, fontFamily: font }}
-            >
-              {data.shop.name.slice(0, 1)}
-            </div>
-            <span className="absolute bottom-4 right-5 rounded-full bg-white/80 px-3 py-1 text-[10px] uppercase tracking-widest text-zinc-500 backdrop-blur">
-              Est. EasyShopAI
-            </span>
-          </div>
-        </section>
-      ) : null}
-
-      <Catalog
-        data={data}
-        slug={route.slug}
-        visuals={visuals}
-        primary={primary}
-        accent={accent}
-        font={font}
-        onBuy={openBuy}
-      />
-
-      <footer className="mt-10 border-t border-black/5 px-5 py-7 text-center text-xs text-zinc-400">
-        {data.shop.policies.notes ? (
-          <p className="mx-auto mb-2 max-w-2xl whitespace-pre-line text-zinc-500">
-            {data.shop.policies.notes}
-          </p>
-        ) : null}
+      <footer
+        className="border-t px-5 py-7 text-center text-[11px]"
+        style={{ borderColor: `${ink}10`, color: muted }}
+      >
         <p style={{ fontFamily: font }}>
           {data.shop.name} · shop on{' '}
           <Link href="/" className="font-medium text-brand-600 hover:underline">
@@ -404,334 +481,6 @@ export default function Storefront() {
         onSelectProduct={(id) => void openBuy(id)}
       />
     </div>
-  );
-}
-
-/* ─────────────────────────────── header ────────────────────────────────── */
-
-function StorefrontHeader({
-  data,
-  primary,
-  accent,
-  font,
-  centered,
-  cartUnits,
-  onCart,
-}: {
-  data: StorefrontPayload;
-  primary: string;
-  accent: string;
-  font?: string;
-  centered: boolean;
-  cartUnits: number;
-  onCart: () => void;
-}) {
-  if (centered) {
-    return (
-      <header className="sticky top-0 z-30 border-b border-black/5 bg-white/75 backdrop-blur">
-        <div className="h-1 w-full" style={{ backgroundColor: primary }} />
-        <div className="mx-auto flex w-full max-w-5xl flex-col items-center gap-1 px-5 py-4">
-          <Link href="/" className="text-[10px] uppercase tracking-[0.3em] text-zinc-400">
-            EasyShopAI
-          </Link>
-          <h1
-            className="text-center text-2xl font-semibold tracking-[0.08em] text-zinc-900"
-            style={{ fontFamily: font }}
-          >
-            {data.shop.name}
-          </h1>
-          <div className="flex flex-wrap items-center justify-center gap-3 text-[10px] uppercase tracking-widest text-zinc-400">
-            <span>Shop</span>
-            {data.shop.contact.phone ? <span>{data.shop.contact.phone}</span> : null}
-            {data.shop.policies.returnPolicy ? <span>Returns</span> : null}
-            <button
-              type="button"
-              onClick={onCart}
-              className="flex items-center gap-1 font-semibold tracking-widest transition hover:text-zinc-800"
-              style={{ color: primary }}
-            >
-              <Icon.Bag size={12} />
-              Cart{cartUnits ? ` (${cartUnits})` : ''}
-            </button>
-          </div>
-        </div>
-      </header>
-    );
-  }
-
-  return (
-    <header className="sticky top-0 z-30 text-white shadow-sm" style={{ backgroundColor: primary }}>
-      <div className="mx-auto flex w-full max-w-5xl flex-wrap items-center gap-4 px-5 py-4">
-        <div className="flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden rounded-2xl bg-white/15 text-lg font-bold backdrop-blur">
-          {data.shop.logoUrl ? (
-            <img src={data.shop.logoUrl} alt="" className="h-full w-full object-cover" />
-          ) : (
-            data.shop.name.slice(0, 1)
-          )}
-        </div>
-        <div className="flex min-w-0 flex-1 flex-col">
-          <h1 className="truncate text-lg font-bold leading-tight" style={{ fontFamily: font }}>
-            {data.shop.name}
-          </h1>
-          {data.shop.description ? (
-            <p className="line-clamp-1 text-[13px] text-white/80">{data.shop.description}</p>
-          ) : null}
-        </div>
-        <span
-          className="hidden items-center gap-1.5 rounded-full px-3 py-1.5 text-[11px] font-medium backdrop-blur sm:flex"
-          style={{ backgroundColor: `${accent}cc` }}
-        >
-          <Icon.Spark size={12} />
-          AI agent inside
-        </span>
-        {data.shop.contact.phone ? (
-          <span className="hidden items-center gap-1.5 rounded-full bg-white/15 px-3 py-1.5 text-[13px] font-medium backdrop-blur lg:flex">
-            <Icon.Phone size={13} />
-            {data.shop.contact.phone}
-          </span>
-        ) : null}
-        <button
-          type="button"
-          onClick={onCart}
-          aria-label={`Open cart (${cartUnits} items)`}
-          className="relative flex items-center gap-1.5 rounded-full bg-white/15 px-3 py-1.5 text-[13px] font-medium backdrop-blur transition hover:bg-white/25"
-        >
-          <Icon.Bag size={14} />
-          <span className="hidden sm:inline">Cart</span>
-          {cartUnits ? (
-            <span
-              className="flex h-5 min-w-5 items-center justify-center rounded-full px-1 text-[10px] font-bold"
-              style={{ backgroundColor: accent, color: '#17181a' }}
-            >
-              {cartUnits}
-            </span>
-          ) : null}
-        </button>
-      </div>
-    </header>
-  );
-}
-
-/* ─────────────────────────── catalog + orders ─────────────────────────── */
-
-type Filters = { q?: string; categoryId?: string; sort?: string };
-
-function Catalog({
-  data,
-  slug,
-  visuals,
-  primary,
-  accent,
-  font,
-  onBuy,
-}: {
-  data: StorefrontPayload;
-  slug: string;
-  visuals: (typeof TEMPLATE_VISUALS)[keyof typeof TEMPLATE_VISUALS];
-  primary: string;
-  accent: string;
-  font?: string;
-  onBuy: (productId: string) => void;
-}) {
-  const [products, setProducts] = useState<ProductPublic[] | null>(data.products);
-  const [q, setQ] = useState('');
-  const [sort, setSort] = useState('newest');
-  const [categoryId, setCategoryId] = useState<string | undefined>(undefined);
-  const [loading, setLoading] = useState(false);
-
-  const refetch = useCallback(
-    (next?: Filters) => {
-      setLoading(true);
-      const sp = new URLSearchParams({ limit: '24' });
-      if (next?.q) sp.set('q', next.q);
-      if (next?.sort) sp.set('sort', next.sort);
-      if (next?.categoryId) sp.set('categoryId', next.categoryId);
-      api<unknown>(`/s/${slug}/products?${sp.toString()}`)
-        .then((raw) => {
-          if (Array.isArray(raw)) setProducts(raw as ProductPublic[]);
-        })
-        .catch(() => {})
-        .finally(() => setLoading(false));
-    },
-    [slug],
-  );
-
-  return (
-    <main className="mx-auto w-full max-w-5xl flex-1 px-5 py-8">
-      <div
-        className={`mb-7 flex flex-wrap items-center gap-2.5 ${
-          visuals.header === 'centered' ? 'justify-center' : ''
-        }`}
-      >
-        <div className="relative">
-          <Icon.Search
-            size={16}
-            className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-zinc-400"
-          />
-          <input
-            value={q}
-            onChange={(e) => setQ(e.target.value)}
-            onKeyDown={(e) => e.key === 'Enter' && refetch({ q, sort, categoryId })}
-            placeholder="Search this store…"
-            className={`${inputClass} w-64 pl-9`}
-          />
-        </div>
-        <div className="relative">
-          <select
-            value={sort}
-            onChange={(e) => {
-              setSort(e.target.value);
-              refetch({ q, sort: e.target.value, categoryId });
-            }}
-            className={`${inputClass} w-auto appearance-none pr-9`}
-            aria-label="Sort products"
-          >
-            <option value="newest">Newest</option>
-            <option value="price_asc">Price ↑</option>
-            <option value="price_desc">Price ↓</option>
-          </select>
-          <Icon.Chevron
-            size={14}
-            className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-zinc-400"
-          />
-        </div>
-        <div className="mx-1 hidden h-6 w-px bg-zinc-200 sm:block" />
-        {data.categories.map((category) => (
-          <button
-            key={category.id}
-            style={
-              categoryId === category.id
-                ? { backgroundColor: primary, color: 'white', borderColor: primary }
-                : undefined
-            }
-            className={`rounded-full border px-3.5 py-1.5 text-[13px] font-medium transition ${
-              categoryId === category.id
-                ? 'shadow-sm'
-                : 'border-black/10 bg-white/70 text-zinc-600 hover:border-zinc-300 hover:text-zinc-900'
-            }`}
-            onClick={() => {
-              const next = categoryId === category.id ? undefined : category.id;
-              setCategoryId(next);
-              refetch({ q, sort, categoryId: next });
-            }}
-          >
-            {category.name}
-          </button>
-        ))}
-      </div>
-
-      {loading ? (
-        <CardSkeletonGrid />
-      ) : !products?.length ? (
-        <div className="flex flex-col items-center gap-2 rounded-3xl border border-dashed border-zinc-300 bg-white/70 p-16 text-center">
-          <div
-            className="flex h-11 w-11 items-center justify-center rounded-2xl text-white"
-            style={{ backgroundColor: primary }}
-          >
-            <Icon.Package size={20} />
-          </div>
-          <p className="text-sm font-semibold text-zinc-700">No products found</p>
-          <p className="max-w-xs text-xs text-zinc-500">
-            Ask the AI assistant in chat — it knows the full catalog.
-          </p>
-        </div>
-      ) : (
-        <div className={`grid ${visuals.grid}`}>
-          {products.map((product) => (
-            <button
-              key={product.id}
-              onClick={() => onBuy(product.id)}
-              className="group text-left"
-              aria-label={`View ${product.name}`}
-            >
-              <div
-                className={`relative w-full overflow-hidden ${visuals.cardAspect} ${
-                  visuals.card === 'plain'
-                    ? 'rounded-2xl bg-zinc-100 shadow-sm'
-                    : 'rounded-xl bg-zinc-100 shadow-md shadow-zinc-900/[0.05]'
-                }`}
-              >
-                {product.images[0] ? (
-                  <img
-                    src={product.images[0]}
-                    alt={product.name}
-                    loading="lazy"
-                    className="h-full w-full object-cover transition duration-500 group-hover:scale-[1.04]"
-                  />
-                ) : (
-                  <div
-                    className="flex h-full w-full items-center justify-center"
-                    style={{ color: `${primary}55` }}
-                  >
-                    <Icon.Package size={28} />
-                  </div>
-                )}
-                {visuals.card === 'editorial' ? (
-                  <div
-                    className="pointer-events-none absolute inset-x-0 bottom-0 h-16 opacity-0 transition group-hover:opacity-100"
-                    style={{ background: `linear-gradient(to top, ${primary}d9, transparent)` }}
-                  />
-                ) : null}
-                <span
-                  className="absolute left-2 top-2 rounded-full bg-white/85 px-2 py-0.5 text-[10px] font-semibold shadow-sm backdrop-blur"
-                  style={{ color: primary }}
-                >
-                  {taka(product.price)}
-                </span>
-                {productSoldOut(product) ? (
-                  <span className="absolute inset-x-0 bottom-0 bg-zinc-900/75 py-1.5 text-center text-[10px] font-semibold uppercase tracking-wide text-white">
-                    Sold out
-                  </span>
-                ) : null}
-              </div>
-              <div className="flex flex-col gap-0.5 px-0.5 pt-3">
-                <span
-                  className={`line-clamp-2 font-medium text-zinc-800 ${
-                    visuals.card === 'editorial' ? 'text-[13px] leading-snug' : 'text-[13px]'
-                  }`}
-                  style={{ fontFamily: font }}
-                >
-                  {product.name}
-                </span>
-                <span className="flex items-baseline gap-2">
-                  <span className="text-[15px] font-bold" style={{ color: primary }}>
-                    {taka(product.price)}
-                  </span>
-                  {productSoldOut(product) ? (
-                    <span className="text-[11px] font-medium text-red-500">Out of stock</span>
-                  ) : productAvailableStock(product) <= 5 ? (
-                    <span className="text-[11px] text-amber-600">
-                      Only {productAvailableStock(product)} left
-                    </span>
-                  ) : null}
-                </span>
-              </div>
-            </button>
-          ))}
-        </div>
-      )}
-
-      {!data.products.length ? (
-        <p className="mt-6 text-center text-xs text-zinc-400">
-          This shop has not published products yet. The AI agent can still answer questions.
-        </p>
-      ) : null}
-
-      <div
-        className="mt-10 flex flex-wrap items-center justify-center gap-2 rounded-2xl border border-black/5 bg-white/60 px-5 py-4 text-center text-[11px] text-zinc-500"
-        style={{ borderColor: `${accent}33` }}
-      >
-        <Icon.Truck size={14} style={{ color: primary }} />
-        {data.shop.deliveryRules.zones.length
-          ? data.shop.deliveryRules.zones
-              .map((zone) => `${zone.name} ৳${zone.charge} · ${zone.etaDays}d`)
-              .join('  ·  ')
-          : 'Delivery charge confirmed by the shop on the phone.'}
-        <span className="mx-2 hidden h-3 w-px bg-zinc-300 sm:block" />
-        <Icon.Shield size={14} style={{ color: primary }} />
-        Cash on delivery
-      </div>
-    </main>
   );
 }
 
@@ -935,6 +684,8 @@ function CartDrawer({
     null,
   );
 
+  useBodyScrollLock(open);
+
   if (!open) return null;
 
   const subtotal = lines.reduce(
@@ -943,6 +694,11 @@ function CartDrawer({
   );
   const deliveryCharge = zones.find((zone) => zone.name === zoneName)?.charge ?? 0;
   const total = subtotal + deliveryCharge;
+
+  const close = () => {
+    setPlaced(null);
+    onClose();
+  };
 
   const submit = async (event: FormEvent) => {
     event.preventDefault();
@@ -982,11 +738,11 @@ function CartDrawer({
     <>
       <div
         className="fixed inset-0 z-50 bg-zinc-900/35 backdrop-blur-[2px]"
-        onClick={onClose}
+        onClick={close}
         aria-hidden="true"
       />
       <aside
-        className="pop-in fixed right-0 top-0 z-50 flex h-full w-full max-w-md flex-col bg-white shadow-2xl"
+        className="pop-in fixed right-0 top-0 z-50 flex h-full max-h-[100dvh] w-full max-w-md flex-col bg-white shadow-2xl"
         role="dialog"
         aria-label="Shopping cart"
       >
@@ -1004,7 +760,7 @@ function CartDrawer({
             </p>
           </div>
           <button
-            onClick={onClose}
+            onClick={close}
             aria-label="Close cart"
             className="rounded-full p-1.5 text-white/85 transition hover:bg-white/15"
           >
@@ -1029,7 +785,7 @@ function CartDrawer({
               will call you on <span className="font-medium text-zinc-800">{placed.phone}</span> to
               confirm.
             </p>
-            <Button variant="ghost" onClick={onClose} className="mt-2">
+            <Button variant="ghost" onClick={close} className="mt-2">
               Keep shopping
             </Button>
           </div>
@@ -1042,12 +798,15 @@ function CartDrawer({
             <p className="max-w-xs text-xs text-zinc-500">
               Add a product from the catalog, or ask the AI agent to find what you need.
             </p>
-            <Button variant="ghost" onClick={onClose}>
+            <Button variant="ghost" onClick={close}>
               Browse products
             </Button>
           </div>
         ) : (
-          <form onSubmit={submit} className="flex flex-1 flex-col overflow-y-auto">
+          <form
+            onSubmit={submit}
+            className="flex flex-1 flex-col overflow-y-auto overscroll-contain"
+          >
             <ul className="flex flex-col gap-3 px-4 py-4">
               {lines.map((line) => {
                 const max = lineStock(line.product, line.variantId);
@@ -1345,51 +1104,52 @@ function ChatWidget({
       {!open ? (
         <button
           onClick={() => setOpen(true)}
-          className="group fixed bottom-5 right-5 z-40 flex items-center gap-2 rounded-full px-4 py-3.5 text-sm font-semibold text-white shadow-xl transition hover:scale-[1.03] active:scale-95"
-          style={{ backgroundColor: primary, boxShadow: `0 10px 30px -6px ${primary}66` }}
-          aria-label="Chat with the AI agent"
+          className="fixed bottom-4 right-4 z-40 flex items-center gap-2 px-4 py-3 text-[13px] font-medium text-white transition hover:brightness-110 sm:bottom-6 sm:right-6"
+          style={{ backgroundColor: primary }}
+          aria-label={`Chat with ${shop.shop.name}`}
         >
-          <Icon.Chat size={18} />
-          <span className="hidden sm:inline">Ask the AI agent</span>
-          <span
-            className="absolute inset-0 -z-10 animate-ping rounded-full opacity-[0.07]"
-            style={{ backgroundColor: primary }}
-          />
+          <Icon.Chat size={15} />
+          Chat
         </button>
       ) : null}
 
       {open ? (
         <div
-          className="pop-in fixed bottom-3 right-3 z-40 flex h-[min(620px,88vh)] w-[min(400px,calc(100vw-1.5rem))] flex-col overflow-hidden rounded-3xl border border-zinc-200/80 bg-white shadow-2xl sm:bottom-5 sm:right-5"
+          className="pop-in fixed bottom-3 right-3 z-40 flex h-[min(620px,88vh)] max-h-[88dvh] w-[min(400px,calc(100vw-1.5rem))] flex-col overflow-hidden rounded-3xl border border-zinc-200/80 bg-white shadow-2xl sm:bottom-5 sm:right-5"
           role="dialog"
           aria-label="AI agent chat"
         >
-          <div
-            className="flex items-center gap-3 px-4 py-3.5 text-white"
-            style={{ backgroundColor: primary }}
-          >
-            <div className="flex h-9 w-9 items-center justify-center rounded-full bg-white/20 backdrop-blur">
-              <Icon.Spark size={17} />
+          <div className="flex items-center gap-3 border-b border-zinc-200 px-4 py-3.5">
+            <div
+              className="flex h-8 w-8 items-center justify-center text-[13px] font-semibold text-white"
+              style={{ backgroundColor: primary }}
+            >
+              {shop.shop.name.slice(0, 1)}
             </div>
             <div className="flex flex-1 flex-col">
-              <span className="text-sm font-semibold leading-tight">{shop.shop.name} agent</span>
-              <span className="text-[11px] text-white/75">instant replies · COD orders</span>
+              <span className="text-[13px] font-medium leading-tight text-zinc-900">
+                {shop.shop.name}
+              </span>
+              <span className="text-[11px] text-zinc-500">Stock, prices and cash on delivery</span>
             </div>
             <span
-              className="h-2 w-2 rounded-full"
+              className="h-1.5 w-1.5 rounded-full"
               style={{ backgroundColor: accent }}
               aria-hidden="true"
             />
             <button
               onClick={() => setOpen(false)}
               aria-label="Close chat"
-              className="rounded-full p-1.5 text-white/85 transition hover:bg-white/15"
+              className="p-1.5 text-zinc-500 transition hover:bg-zinc-100"
             >
               <Icon.X size={17} />
             </button>
           </div>
 
-          <div ref={scrollRef} className="flex-1 space-y-3 overflow-y-auto bg-[#f7f7f6] px-3 py-4">
+          <div
+            ref={scrollRef}
+            className="flex-1 space-y-3 overflow-y-auto overscroll-contain bg-[#f7f7f6] px-3 py-4"
+          >
             {msgs.map((message, index) => (
               <div
                 key={index}
@@ -1411,10 +1171,10 @@ function ChatWidget({
                   <div className="flex max-w-[94%] flex-col gap-2">
                     <div className="flex items-start gap-2">
                       <div
-                        className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-white"
+                        className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-[10px] font-semibold text-white"
                         style={{ backgroundColor: primary }}
                       >
-                        <Icon.Spark size={12} />
+                        {shop.shop.name.slice(0, 1)}
                       </div>
                       <div className="rounded-2xl rounded-tl-md border border-zinc-200/70 bg-white px-3.5 py-2.5 text-sm leading-relaxed text-zinc-800 shadow-sm">
                         {message.text}

@@ -22,10 +22,7 @@
 }
 
 body {
-  background:
-    radial-gradient(1200px 400px at 15% -10%, rgba(16, 185, 129, 0.06), transparent 60%),
-    radial-gradient(1000px 360px at 90% -12%, rgba(14, 165, 233, 0.05), transparent 55%),
-    var(--background);
+  background: var(--background);
   color: var(--foreground);
   letter-spacing: -0.006em;
   line-height: 1.55;
@@ -33,7 +30,8 @@ body {
 
 /* Selected text in brand tone */
 ::selection {
-  background: rgba(16, 185, 129, 0.25);
+  background: #17181a;
+  color: #fff;
 }
 
 /* Slim, quiet scrollbars */
@@ -99,4 +97,93 @@ input[type='number'] {
 }
 .pop-in {
   animation: es-pop 0.18s ease-out;
+}
+
+/* ─────────────────────────── storefront motion ─────────────────────────── */
+
+/* Very slow image drift for full-bleed hero photography. */
+@keyframes es-drift {
+  from {
+    transform: scale(1.04) translate3d(0, 0, 0);
+  }
+  to {
+    transform: scale(1.14) translate3d(-1.5%, -2%, 0);
+  }
+}
+.es-drift {
+  animation: es-drift 26s ease-in-out infinite alternate;
+}
+
+/* Deliberate entrance: content rises once, images unveil by clip.
+ * Visible is the default state — `.es-pending` is only added by script for
+ * elements below the fold, so missing or stalled JS can never hide content. */
+.es-reveal {
+  transition:
+    opacity 1s cubic-bezier(0.16, 1, 0.3, 1),
+    transform 1s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.es-reveal.es-pending {
+  opacity: 0;
+  transform: translateY(22px);
+}
+
+.es-unveil {
+  transition: clip-path 1.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.es-unveil.es-pending {
+  clip-path: inset(0 0 100% 0);
+}
+
+/* ─────────────────────────── responsive guardrails ─────────────────────── */
+
+/* A single stray element must never give the page sideways scroll. */
+html {
+  overflow-x: clip;
+}
+
+/* Seller-written names and descriptions are arbitrary length: let them wrap
+   instead of pushing the layout wider than the screen. */
+h1,
+h2,
+h3 {
+  overflow-wrap: break-word;
+}
+
+/* Underline that grows from the left — used on text links, not buttons. */
+.es-link {
+  position: relative;
+}
+.es-link::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  bottom: -2px;
+  height: 1px;
+  width: 100%;
+  background: currentColor;
+  transform: scaleX(0);
+  transform-origin: left;
+  transition: transform 0.5s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.es-link:hover::after {
+  transform: scaleX(1);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .es-drift,
+  .pop-in {
+    animation: none !important;
+  }
+  .es-reveal,
+  .es-unveil,
+  .es-reveal.es-pending,
+  .es-unveil.es-pending {
+    opacity: 1;
+    transform: none;
+    clip-path: none;
+    transition: none;
+  }
+  .es-link::after {
+    transition: none;
+  }
 }

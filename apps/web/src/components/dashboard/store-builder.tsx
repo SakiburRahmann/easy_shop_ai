@@ -83,13 +83,13 @@ function TemplateThumbnail({
   accent: string;
 }) {
   const visuals = TEMPLATE_VISUALS[id];
-  const gridClass = visuals.header === 'centered' ? 'grid-cols-3' : 'grid-cols-4';
+  const gridClass = visuals.header === 'masthead' ? 'grid-cols-3' : 'grid-cols-4';
   return (
     <div
       className="flex h-32 w-full flex-col overflow-hidden rounded-lg border border-zinc-200 bg-white"
       style={{ backgroundColor: visuals.surface }}
     >
-      {visuals.header === 'centered' ? (
+      {visuals.header === 'masthead' ? (
         <div className="flex flex-col items-center gap-1 border-b border-black/5 px-2 py-2">
           <span className="h-1.5 w-16 rounded-full" style={{ backgroundColor: primary }} />
           <div className="flex gap-1">
@@ -105,11 +105,8 @@ function TemplateThumbnail({
           <span className="ml-auto h-3 w-8 rounded-full bg-white/20" />
         </div>
       )}
-      {visuals.hero === 'gradient' ? (
-        <div
-          className="mx-2 mt-2 h-7 rounded px-2 py-1"
-          style={{ background: `linear-gradient(110deg, ${primary}, ${accent})` }}
-        >
+      {visuals.hero === 'collage' ? (
+        <div className="mx-2 mt-2 h-7 rounded px-2 py-1" style={{ backgroundColor: primary }}>
           <span className="block h-1 w-20 rounded-full bg-white/80" />
         </div>
       ) : null}
@@ -130,7 +127,7 @@ function TemplateThumbnail({
           <div key={i} className="flex flex-col gap-0.5">
             <span
               className={`block rounded bg-zinc-200 ${
-                visuals.card === 'editorial' ? 'h-7' : 'h-6'
+                visuals.catalog === 'atelier' ? 'h-7' : 'h-6'
               }`}
               style={i === 0 ? { backgroundColor: `${primary}22` } : undefined}
             />
@@ -369,7 +366,7 @@ export function MiniStorePreview({
   categories?: readonly string[];
 }) {
   const visuals = TEMPLATE_VISUALS[templateId];
-  const font = storefrontFont(theme.font);
+  const font = storefrontFont(theme.font, visuals.display);
   const samples = (
     categories?.length ? categories : ['New arrivals', 'Best sellers', 'Featured']
   ).slice(0, 4);
@@ -379,7 +376,7 @@ export function MiniStorePreview({
       className="overflow-hidden rounded-2xl border border-zinc-200 shadow-sm"
       style={{ backgroundColor: visuals.surface, fontFamily: font }}
     >
-      {visuals.header === 'centered' ? (
+      {visuals.header === 'masthead' ? (
         <div className="border-b border-black/5 px-4 py-3 text-center">
           <p
             className="text-sm font-semibold tracking-[0.18em] uppercase"
@@ -402,20 +399,19 @@ export function MiniStorePreview({
             {(name || 'S').slice(0, 1)}
           </span>
           <span className="text-xs font-bold">{name || 'Your shop'}</span>
-          <span className="ml-auto rounded-full bg-white/20 px-2 py-0.5 text-[9px]">AI agent</span>
         </div>
       )}
 
-      {visuals.hero === 'gradient' ? (
+      {visuals.hero === 'collage' ? (
         <div
           className="mx-3 mt-3 rounded-xl px-4 py-4 text-white"
           style={{
-            background: `linear-gradient(120deg, ${theme.primaryColor}, ${theme.accentColor})`,
+            backgroundColor: theme.primaryColor,
           }}
         >
           <p className="text-[9px] uppercase tracking-widest text-white/70">New collection</p>
           <p className="mt-1 line-clamp-2 text-sm font-semibold leading-snug">
-            {description || 'Curated pieces for every day.'}
+            {description || 'Add a short description.'}
           </p>
         </div>
       ) : null}

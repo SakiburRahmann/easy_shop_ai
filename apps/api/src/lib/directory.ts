@@ -1,6 +1,7 @@
 import {
   businessTypeSchema,
   shopDirectoryItemSchema,
+  templateIdSchema,
   type ShopDirectoryItem,
 } from '@easyshop/shared';
 
@@ -40,20 +41,21 @@ export function toDirectoryItems(
     byShop.set(shopId, entry);
   }
   const items: ShopDirectoryItem[] = [];
-  for (const result of rows.map((r) =>
-    shopDirectoryItemSchema.safeParse({
+  for (const result of rows.map((r) => {
+    const templateId = templateIdSchema.safeParse(r.template_id);
+    return shopDirectoryItemSchema.safeParse({
       id: r.id,
       name: r.name,
       slug: r.slug,
       businessType: businessTypeSchema.safeParse(r.business_type).data ?? 'other',
       description: r.description ?? null,
-      templateId: r.template_id === 'modern' ? 'modern' : 'classic',
+      templateId: templateId.success ? templateId.data : 'classic',
       theme: r.theme ?? {},
       contact: r.contact ?? {},
       productCount: byShop.get(String(r.id ?? ''))?.count ?? 0,
       topImages: byShop.get(String(r.id ?? ''))?.images ?? [],
-    }),
-  )) {
+    });
+  })) {
     if (result.success) items.push(result.data);
   }
   return items;
