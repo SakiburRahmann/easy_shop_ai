@@ -90,9 +90,11 @@ Seller app → Mobile (Expo) ────────┘        │
 - **Auth:** one Supabase account system; the same login works on web and mobile.
 - **Multi-tenancy:** every table has `shop_id`, every query is filtered server-side. AI tools are
   scoped to a server-set shop ID.
-- **Templates:** three visually distinct storefront shells driven by a shared template config
-  (`apps/web/src/components/storefront/templates.ts`); adding a template = adding an entry and a
-  DB constraint value, not generating code.
+- **Templates:** three visually distinct storefront shells composed from a shared section registry
+  (`apps/web/src/components/storefront/sections.tsx`). Each preset in `templates.ts` declares an
+  ordered section list, header style and catalog presentation, so templates differ by composition
+  and merchandising hierarchy — not by colour. Adding a template = adding a preset entry and a DB
+  constraint value, not generating code.
 - **Monorepo:** pnpm workspaces + Turborepo, `apps/web`, `apps/mobile`, `apps/api`,
   `packages/shared`.
 
@@ -152,8 +154,10 @@ Products without variants use their own `stock` column and the matching
   has zones; the server prices every line and the delivery charge
 - Storefront URL on the static site: `/s?shop=<slug>` (Cloudflare Pages normalizes deep `/s/<slug>`
   paths to `/s`; the shell reads the slug from the query)
-- Templates render distinct storefront layouts: `classic` (clean catalog grid), `modern` (hero banner
-  - editorial cards) and `boutique` (centered, serif display), all driven by `theme`
+- Templates render distinct storefront compositions, all sharing one catalog, cart, COD checkout
+  and AI agent: `classic` (announcement bar → intro → dense grid → trust → policies), `modern`
+  (dark collage hero → category mosaic → product rail → gallery → story → trust) and `boutique`
+  (editorial hero with image band → numbered category index → two-column atelier → story → policies)
 
 **Seller**
 

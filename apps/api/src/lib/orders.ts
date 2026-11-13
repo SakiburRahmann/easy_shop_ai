@@ -237,7 +237,7 @@ export async function createOrderForShop(params: CreateOrderParams): Promise<Cre
 export async function restoreStockForOrder(db: Db, orderId: string): Promise<void> {
   const { data, error } = await db
     .from('order_items')
-    .select('variant_id, qty')
+    .select('product_id, variant_id, qty')
     .eq('order_id', orderId);
   if (error) {
     console.error('[orders] could not load items for restock:', error.message);

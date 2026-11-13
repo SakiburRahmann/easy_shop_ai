@@ -57,6 +57,11 @@ describe('toDirectoryItems', () => {
     expect(item?.templateId).toBe('classic');
   });
 
+  it('preserves all supported templates, including boutique', () => {
+    const [item] = toDirectoryItems([{ ...shop, template_id: 'boutique' }], []);
+    expect(item?.templateId).toBe('boutique');
+  });
+
   it('never includes owner or pricing secrets', () => {
     const [item] = toDirectoryItems(
       [{ ...shop, owner_id: 'xyz' }],

@@ -142,9 +142,9 @@ export default function Dashboard() {
             </span>
           </Link>
           {shop ? (
-            <span className="flex items-center gap-1.5 rounded-full bg-brand-50 px-2.5 py-1 text-xs font-medium text-brand-700">
-              <Icon.Store size={12} />
-              {shop.name}
+            <span className="flex max-w-[46vw] items-center gap-1.5 rounded-full bg-brand-50 px-2.5 py-1 text-xs font-medium text-brand-700">
+              <Icon.Store size={12} className="shrink-0" />
+              <span className="truncate">{shop.name}</span>
             </span>
           ) : null}
           <div className="ml-auto flex items-center gap-2 text-sm">
@@ -169,7 +169,7 @@ export default function Dashboard() {
       <div className="mx-auto w-full max-w-5xl flex-1 px-4 py-6">
         {shop ? (
           <>
-            <nav className="mb-6 flex gap-1 rounded-2xl bg-zinc-100 p-1 text-sm font-medium">
+            <nav className="mb-6 flex gap-1 overflow-x-auto rounded-2xl bg-zinc-100 p-1 text-sm font-medium [scrollbar-width:none] [&>button]:shrink-0">
               {(
                 [
                   ['products', 'Products', <Icon.Package key="p" size={15} />],
@@ -529,7 +529,7 @@ function Onboarding({
           Build your online store
         </h1>
         <p className="mt-1 text-sm text-zinc-500">
-          {email} · four quick steps and your storefront + AI agent go live.
+          {email}. 4 steps: business, storefront, delivery, launch.
         </p>
         <div className="mt-3 flex gap-1.5">
           {[1, 2, 3, 4].map((n) => (

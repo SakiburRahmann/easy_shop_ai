@@ -17,7 +17,7 @@ import type { EnvShape } from '../lib/env';
 import { requireAuth, ownedShop } from '../lib/auth';
 import { notFound, param, parseBody } from '../lib/validation';
 import { slugify, slugVariants } from '../lib/slug';
-import { iso, num, str, strArr, strOrNull, toCategory, toMessage, toShop } from '../lib/serialize';
+import { iso, str, toAiSettings, toCategory, toMessage, toShop } from '../lib/serialize';
 import { sanitizePostgrestIlike, toDirectoryItems } from '../lib/directory';
 import type { AiSettings, Category, Conversation } from '@easyshop/shared';
 
@@ -239,13 +239,7 @@ async function ensureAiSettings(
     .eq('shop_id', shopId)
     .maybeSingle();
   if (error || !data) return null;
-  return aiSettingsSchema.parse({
-    shopId,
-    tone: str((data as Record<string, unknown>).tone, 'friendly'),
-    languages: strArr((data as Record<string, unknown>).languages),
-    maxDiscountPct: num((data as Record<string, unknown>).max_discount_pct),
-    extraInstructions: strOrNull((data as Record<string, unknown>).extra_instructions),
-  });
+  return aiSettingsSchema.parse(toAiSettings(data));
 }
 
 shopRoutes.get('/shops/:shopId/ai-settings', requireAuth, async (c) => {
@@ -279,7 +273,7 @@ shopRoutes.patch('/shops/:shopId/ai-settings', requireAuth, async (c) => {
     .single();
   if (error || !data) return c.json({ error: error?.message ?? 'Update failed' }, 500);
   const settings = await ensureAiSettings(c, shop.id);
-  return c.json(settings ?? DEFAULT_AI);
+  return c.json(settings ?? { ...DEFAULT_AI, shopId: shop.id });
 });
 
 /* ---------------------------------------------------------- conversations -- */
