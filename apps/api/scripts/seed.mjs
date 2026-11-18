@@ -149,7 +149,7 @@ async function main() {
   console.log('✓ ai settings');
 
   // 4. Categories -----------------------------------------------------------
-  const catNames = ['T-Shirt', 'Saree', 'Panjabi', 'Kids', 'Shirt'];
+  const catNames = ['T-Shirts', 'Hoodies', 'Trousers', 'Shoes', 'Outerwear', 'Dresses'];
   const cats = await rest(
     '/rest/v1/categories',
     'POST',
@@ -159,92 +159,98 @@ async function main() {
   const catId = Object.fromEntries(catRows.map((c) => [c.name, c.id]));
   console.log(`✓ ${catRows.length} categories`);
 
-  const img = (seed, w = 800, h = 900) => `https://picsum.photos/seed/${seed}/${w}/${h}`;
+  // Verified Unsplash photography (see apps/web/src/components/storefront/
+  // image-library.ts). Product cards must show the item itself, so each demo
+  // product carries an image of the garment it describes.
+  const img = (id, w = 900, h = 1100) =>
+    `https://images.unsplash.com/photo-${id}?auto=format&fit=crop&w=${w}&h=${h}&q=80`;
 
   // 5. Products + variants --------------------------------------------------
   const products = [
     {
-      name: 'লাল কটন টি-শার্ট (Red Cotton T-Shirt)',
+      name: 'হেভিওয়েট কটন টি-শার্ট (Heavyweight Cotton Tee)',
       description:
-        '100% কটন, গরমের জন্য পারফেক্ট। রঙ ফেড হয় না। (100% cotton mid-weight tee, does not fade.)',
-      category_id: catId['T-Shirt'],
-      price: 650,
-      floor_price: 500,
-      images: [img('red-tee')],
+        'মোটা ২২০ জিএসএম কটন, ধোয়ার পরেও রঙ ফেড হয় না। (220 GSM combed cotton, stays true after washing.)',
+      category_id: catId['T-Shirts'],
+      price: 1150,
+      floor_price: 900,
+      images: [img('1521572163474-6864f9cf17ab')],
       variants: [
-        { size: 'S', color: 'Red', stock: 10, price_override: null },
-        { size: 'M', color: 'Red', stock: 8, price_override: null },
-        { size: 'L', color: 'Red', stock: 12, price_override: 700 },
+        { size: 'S', color: 'White', stock: 10, price_override: null },
+        { size: 'M', color: 'White', stock: 8, price_override: null },
+        { size: 'L', color: 'White', stock: 12, price_override: 1250 },
       ],
     },
     {
-      name: 'Black Oversized T-Shirt',
-      description: 'Street-style oversized fit, thick 220 GSM. সাইজ বড় দেখতে পাবেন বড় বেছে নিন।',
-      category_id: catId['T-Shirt'],
-      price: 750,
-      floor_price: 600,
-      images: [img('black-tee')],
-      variants: [
-        { size: 'M', color: 'Black', stock: 5, price_override: null },
-        { size: 'XL', color: 'Black', stock: 3, price_override: 820 },
-      ],
-    },
-    {
-      name: 'জামদানি শাড়ি (Jamdani Saree)',
-      description: 'আসল জামদানি বুটিদার শাড়ি, ব্লাউজ পিস সহ। বিয়ে ও উৎসবের জন্য একদম পারফেক্ট।',
-      category_id: catId['Saree'],
-      price: 3500,
-      floor_price: 2800,
-      images: [img('jamdani-saree'), img('jamdani-detail')],
-      variants: [{ color: 'Merlot', stock: 4, price_override: null }],
-    },
-    {
-      name: 'Half Silk Saree',
-      description: 'হাফ সিল্ক শাড়ি, অফিস-ক্লাসের জন্য হালকা ও আরামদায়ক।',
-      category_id: catId['Saree'],
-      price: 1800,
-      floor_price: 1500,
-      images: [img('half-silk-saree')],
-      variants: [
-        { color: 'Teal', stock: 6, price_override: null },
-        { color: 'Pink', stock: 4, price_override: null },
-      ],
-    },
-    {
-      name: 'White Panjabi',
-      description: 'মালমল কটন পাঞ্জাবি, এমব্রয়ডারি কলার। ঈদ-জুম্মার জন্য ভালো।',
-      category_id: catId['Panjabi'],
-      price: 1200,
-      floor_price: 1000,
-      images: [img('white-panjabi')],
-      variants: [
-        { size: 'M', color: 'White', stock: 7, price_override: null },
-        { size: 'L', color: 'White', stock: 7, price_override: null },
-      ],
-    },
-    {
-      name: 'Kids Printed Tee',
+      name: 'ব্রাশড ফ্লিস হুডি (Brushed Fleece Hoodie)',
       description:
-        'খাটুনি কটন বাচ্চাদের টি-শার্ট, প্রিন্ট সুন্দর ও টিকে থাকে। (Soft combed-cotton kids tee with a durable print.)',
-      category_id: catId['Kids'],
-      price: 450,
-      floor_price: 350,
-      images: [img('kids-tee')],
+        'ভেতরে ব্রাশড ফ্লিস, ঠান্ডায় আরামদায়ক। (Heavy brushed fleece hoodie, relaxed fit.)',
+      category_id: catId['Hoodies'],
+      price: 2400,
+      floor_price: 1900,
+      images: [img('1517841905240-472988babdf9')],
       variants: [
-        { size: '2-3Y', color: 'Yellow', stock: 9, price_override: null },
-        { size: '4-5Y', color: 'Yellow', stock: 9, price_override: null },
+        { size: 'M', color: 'Pale Blue', stock: 5, price_override: null },
+        { size: 'XL', color: 'Pale Blue', stock: 3, price_override: 2600 },
       ],
     },
     {
-      name: 'Blue Denim Shirt',
-      description: 'Slim-fit ডেনিম শার্ট, ডাবল পকেট। হারাশ নেই, লং লাস্টিং কালার।',
-      category_id: catId['Shirt'],
-      price: 1450,
-      floor_price: 1200,
-      images: [img('denim-shirt')],
+      name: 'সিল্ক স্লিপ ড্রেস (Silk Slip Dress)',
+      description: 'হালকা সিল্ক, বায়াস কাট। (Bias-cut silk slip dress with adjustable straps.)',
+      category_id: catId['Dresses'],
+      price: 4300,
+      floor_price: 3500,
+      images: [img('1566174053879-31528523f8ae')],
+      variants: [{ size: 'M', color: 'Burgundy', stock: 4, price_override: null }],
+    },
+    {
+      name: 'উল ব্লেন্ড ওভারকোট (Wool Blend Overcoat)',
+      description:
+        'দীর্ঘ উল ব্লেন্ড কোট, শীতের শহরের জন্য। (Longline wool blend overcoat, structured shoulder.)',
+      category_id: catId['Outerwear'],
+      price: 6800,
+      floor_price: 5400,
+      images: [img('1485968579580-b6d095142e6e')],
       variants: [
-        { size: 'M', color: 'Wash Blue', stock: 4, price_override: null },
-        { size: 'L', color: 'Wash Blue', stock: 4, price_override: null },
+        { size: 'S', color: 'Plaid', stock: 6, price_override: null },
+        { size: 'M', color: 'Plaid', stock: 4, price_override: null },
+      ],
+    },
+    {
+      name: 'সেলভেজ ডেনিম জ্যাকেট (Selvedge Denim Jacket)',
+      description:
+        'মোটা সেলভেজ ডেনিম, ক্রমশ নিজের মতো ফেড হবে। (Rigid selvedge denim jacket, fades with wear.)',
+      category_id: catId['Outerwear'],
+      price: 5200,
+      floor_price: 4200,
+      images: [img('1611312449408-fcece27cdbb7')],
+      variants: [
+        { size: 'M', color: 'Indigo', stock: 7, price_override: null },
+        { size: 'L', color: 'Indigo', stock: 7, price_override: null },
+      ],
+    },
+    {
+      name: 'টেপার্ড কার্গো ট্রাউজার (Tapered Cargo Trouser)',
+      description: 'কটন টুইল কার্গো, ছয়টি পকেট। (Cotton twill cargo with a clean tapered leg.)',
+      category_id: catId['Trousers'],
+      price: 2850,
+      floor_price: 2300,
+      images: [img('1548883354-7622d03aca27')],
+      variants: [
+        { size: '30', color: 'Charcoal', stock: 9, price_override: null },
+        { size: '32', color: 'Charcoal', stock: 9, price_override: null },
+      ],
+    },
+    {
+      name: 'সুয়েড লো-টপ স্নিকার (Suede Low-Top Sneaker)',
+      description: 'সুয়েড আপার, কুশনড ইনসোল। (Suede upper on a cupsole, padded collar.)',
+      category_id: catId['Shoes'],
+      price: 3900,
+      floor_price: 3100,
+      images: [img('1549298916-b41d501d3772')],
+      variants: [
+        { size: '41', color: 'Tan', stock: 4, price_override: null },
+        { size: '42', color: 'Tan', stock: 4, price_override: null },
       ],
     },
   ];

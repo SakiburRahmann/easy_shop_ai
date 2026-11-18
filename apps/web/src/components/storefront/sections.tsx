@@ -23,6 +23,39 @@ import type { DecorSet } from '@/components/storefront/decor';
 
 const CONTAINER = 'mx-auto w-full max-w-7xl px-5 sm:px-8';
 
+/**
+ * Decorative photography with a safety net: if the CDN refuses an id, the frame
+ * swaps to another verified shot, and only hides itself if that also fails — a
+ * storefront never shows a broken image icon.
+ */
+function DecorImg({
+  src,
+  fallback,
+  className,
+}: {
+  src: string;
+  fallback: string;
+  className?: string;
+}) {
+  return (
+    <img
+      src={src}
+      alt=""
+      loading="lazy"
+      className={className}
+      onError={(event) => {
+        const image = event.currentTarget;
+        if (image.dataset.fallback === '1') {
+          image.style.visibility = 'hidden';
+          return;
+        }
+        image.dataset.fallback = '1';
+        image.src = fallback;
+      }}
+    />
+  );
+}
+
 function productImage(products: readonly ProductPublic[]): string | undefined {
   return products.find((product) => product.images[0])?.images[0];
 }
@@ -307,12 +340,20 @@ export function IntroStrip({
         <div className="grid grid-cols-2 gap-3 lg:col-span-5">
           {shots[0] ? (
             <Reveal variant="unveil" className="mt-0 sm:mt-6">
-              <img src={shots[0]} alt="" className="aspect-[3/4] w-full object-cover" />
+              <DecorImg
+                src={shots[0]}
+                fallback={decor.fallback}
+                className="aspect-[3/4] w-full object-cover"
+              />
             </Reveal>
           ) : null}
           {shots[1] ? (
             <Reveal variant="unveil" delay={120}>
-              <img src={shots[1]} alt="" className="aspect-[3/4] w-full object-cover" />
+              <DecorImg
+                src={shots[1]}
+                fallback={decor.looks[0] ?? decor.fallback}
+                className="aspect-[3/4] w-full object-cover"
+              />
             </Reveal>
           ) : null}
         </div>
@@ -351,9 +392,9 @@ export function CollageHero({
 
   return (
     <section className="relative isolate flex min-h-[78svh] flex-col justify-end overflow-hidden bg-[#0d0e10] text-white">
-      <img
+      <DecorImg
         src={hero}
-        alt=""
+        fallback={decor.looks[0] ?? decor.fallback}
         className="es-drift absolute inset-0 -z-10 h-full w-full object-cover opacity-[0.62]"
       />
       <div className="absolute inset-0 -z-10 bg-gradient-to-t from-[#0d0e10] via-[#0d0e10]/45 to-[#0d0e10]/70" />
@@ -451,16 +492,21 @@ export function EditorialHero({
       <div className={`${CONTAINER} mt-8 grid gap-3 lg:grid-cols-12`}>
         <Reveal variant="unveil" className="lg:col-span-7">
           {main ? (
-            <img
+            <DecorImg
               src={main}
-              alt=""
+              fallback={decor.looks[0] ?? decor.fallback}
               className="h-[52vw] max-h-[560px] w-full object-cover sm:h-[420px]"
             />
           ) : null}
         </Reveal>
         <div className="grid grid-cols-2 gap-3 lg:col-span-5 lg:grid-cols-1">
-          {looks.slice(0, 2).map((look) => (
-            <img key={look} src={look} alt="" className="h-full w-full object-cover" />
+          {looks.slice(0, 2).map((look, index) => (
+            <DecorImg
+              key={`${look}-${index}`}
+              src={look}
+              fallback={decor.categories[index] ?? decor.fallback}
+              className="h-full w-full object-cover"
+            />
           ))}
         </div>
       </div>
@@ -472,6 +518,7 @@ export function EditorialHero({
 export function CategoryCollage({
   categories,
   products,
+  decor,
   ink,
   muted,
   font,
@@ -479,6 +526,7 @@ export function CategoryCollage({
 }: {
   categories: readonly Category[];
   products: readonly ProductPublic[];
+  decor: DecorSet;
   ink: string;
   muted: string;
   font?: string;
@@ -502,7 +550,9 @@ export function CategoryCollage({
       </div>
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-12 sm:gap-4">
         {tiles.map((category, index) => {
-          const image = categoryImage(category, products);
+          const image =
+            categoryImage(category, products) ??
+            decor.categories[index % Math.max(decor.categories.length, 1)];
           const wide = index === 0;
           return (
             <button
@@ -514,10 +564,11 @@ export function CategoryCollage({
               aria-label={`Browse ${category.name}`}
             >
               {image ? (
-                <img
+                <DecorImg
                   src={image}
-                  alt=""
-                  loading="lazy"
+                  fallback={
+                    decor.categories[(index + 1) % decor.categories.length] ?? decor.fallback
+                  }
                   className={`w-full object-cover transition-transform duration-[1200ms] ease-[cubic-bezier(.16,1,.3,1)] group-hover:scale-[1.05] ${
                     wide ? 'aspect-[4/3] sm:aspect-[4/5]' : 'aspect-[4/3] sm:aspect-[16/10]'
                   }`}
@@ -684,9 +735,9 @@ export function StoryBand({
     <section className="bg-[#0d0e10] text-white">
       <div className="mx-auto grid w-full max-w-7xl gap-0 lg:grid-cols-2">
         <Reveal variant="unveil" className="order-2 lg:order-1">
-          <img
+          <DecorImg
             src={decor.story}
-            alt=""
+            fallback={decor.categories[0] ?? decor.fallback}
             className="h-full min-h-[320px] w-full object-cover lg:min-h-[520px]"
           />
         </Reveal>

@@ -387,6 +387,7 @@ export default function Storefront() {
                 key="categoryCollage"
                 categories={data.categories}
                 products={data.products}
+                decor={decor}
                 ink={ink}
                 muted={muted}
                 font={font}
