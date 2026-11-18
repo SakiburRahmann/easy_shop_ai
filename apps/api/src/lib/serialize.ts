@@ -1,6 +1,7 @@
 import {
   businessTypeSchema,
   productAvailableStock,
+  storefrontThemeSchema,
   templateIdSchema,
   type AiSettings,
   type Category,
@@ -89,6 +90,9 @@ export function toShop(row: unknown): Shop {
     },
     deliveryRules: { zones },
     policies: obj(r.policies) as Shop['policies'],
+    // Invalid/garbage rows degrade to "no theme applied" — the templateId
+    // house preset then renders, so a bad row can never break a storefront.
+    storefront: storefrontThemeSchema.safeParse(r.storefront).data ?? null,
     createdAt: iso(r.created_at),
     updatedAt: iso(r.updated_at),
   };

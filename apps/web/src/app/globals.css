@@ -134,6 +134,36 @@ input[type='number'] {
   clip-path: inset(0 0 100% 0);
 }
 
+/* ─────────────────────── AI design document hooks ──────────────────────── */
+
+/* Only AI-designed storefronts carry these attributes; hand-built template
+   presets are untouched. `density` sets the section rhythm, `radius` sets the
+   corner language — both are chosen by the design document, and both are
+   applied through CSS so no generated markup is involved. */
+
+[data-es-density='airy'] > section {
+  padding-block: clamp(4rem, 7vw, 7rem);
+}
+[data-es-density='compact'] > section {
+  padding-block: clamp(1.75rem, 3vw, 2.75rem);
+}
+
+[data-es-radius='sharp']
+  :where(
+    .rounded-sm,
+    .rounded-md,
+    .rounded-lg,
+    .rounded-xl,
+    .rounded-2xl,
+    .rounded-3xl,
+    .rounded-full
+  ) {
+  border-radius: 2px;
+}
+[data-es-radius='round'] :where(.rounded-\[3px\], .rounded-sm, .rounded-md) {
+  border-radius: 14px;
+}
+
 /* ─────────────────────────── responsive guardrails ─────────────────────── */
 
 /* A single stray element must never give the page sideways scroll. */

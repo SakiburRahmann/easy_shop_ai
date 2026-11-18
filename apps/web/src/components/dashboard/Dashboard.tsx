@@ -36,6 +36,7 @@ import ProductsTab from './ProductsTab';
 import OrdersTab from './OrdersTab';
 import ChatsTab from './ChatsTab';
 import SettingsTab from './SettingsTab';
+import ThemeGallery from './ThemeGallery';
 
 const TOKEN_KEY = 'easyshopai.token';
 const USER_KEY = 'easyshopai.user';
@@ -59,7 +60,9 @@ export default function Dashboard() {
   );
   const [session, setSession] = useState<Session | null>(null);
   const [shop, setShop] = useState<Shop | null>(null);
-  const [tab, setTab] = useState<'products' | 'orders' | 'chats' | 'settings'>('products');
+  const [tab, setTab] = useState<'products' | 'orders' | 'chats' | 'theme' | 'settings'>(
+    'products',
+  );
 
   /** Authenticated API helper; logs out on expired tokens. */
   const auth = useCallback(
@@ -175,6 +178,7 @@ export default function Dashboard() {
                   ['products', 'Products', <Icon.Package key="p" size={15} />],
                   ['orders', 'Orders', <Icon.Bag key="o" size={15} />],
                   ['chats', 'Chats', <Icon.Message key="c" size={15} />],
+                  ['theme', 'Theme', <Icon.Palette key="d" size={15} />],
                   ['settings', 'Store & AI', <Icon.Palette key="s" size={15} />],
                 ] as const
               ).map(([key, label, icon]) => (
@@ -195,6 +199,9 @@ export default function Dashboard() {
             {tab === 'products' ? <ProductsTab auth={auth} shop={shop} /> : null}
             {tab === 'orders' ? <OrdersTab auth={auth} shop={shop} /> : null}
             {tab === 'chats' ? <ChatsTab auth={auth} shop={shop} /> : null}
+            {tab === 'theme' ? (
+              <ThemeGallery auth={auth} shop={shop} onShopChange={setShop} />
+            ) : null}
             {tab === 'settings' ? (
               <SettingsTab auth={auth} shop={shop} onShopChange={setShop} />
             ) : null}

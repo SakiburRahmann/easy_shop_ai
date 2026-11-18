@@ -213,9 +213,18 @@ export function ProductCard({
 /* ───────────────────────────────── sections ───────────────────────────── */
 
 /** Delivery and payment facts, set still. Nothing moves on its own. */
-export function AnnouncementBar({ shop, primary }: { shop: Shop; primary: string }) {
+export function AnnouncementBar({
+  shop,
+  primary,
+  announcement,
+}: {
+  shop: Shop;
+  primary: string;
+  announcement?: string;
+}) {
   const zones = shop.deliveryRules.zones;
   const facts = [
+    ...(announcement ? [announcement] : []),
     ...zones.slice(0, 3).map((zone) => `${zone.name} · ৳${zone.charge} · ${zone.etaDays}d`),
     'Cash on delivery',
     shop.contact.phone ? `Call ${shop.contact.phone}` : 'Order by chat',
@@ -245,6 +254,9 @@ export function IntroStrip({
   ink,
   muted,
   font,
+  headline,
+  subhead,
+  ctaLabel,
 }: {
   shop: Shop;
   products: readonly ProductPublic[];
@@ -253,6 +265,10 @@ export function IntroStrip({
   ink: string;
   muted: string;
   font?: string;
+  /** AI design copy; falls back to the seller's own words. */
+  headline?: string;
+  subhead?: string;
+  ctaLabel?: string;
 }) {
   const shots = [
     productImage(products) ?? decor.looks[0],
@@ -267,10 +283,10 @@ export function IntroStrip({
             className="max-w-[19ch] text-[clamp(2.3rem,4.6vw,3.9rem)] font-medium leading-[1.04] tracking-[-0.015em]"
             style={{ color: ink, fontFamily: font }}
           >
-            {shop.description || shop.name}
+            {headline ?? (shop.description || shop.name)}
           </h1>
           <p className="mt-6 max-w-md text-[13px] leading-relaxed" style={{ color: muted }}>
-            {shop.policies.notes || shopNote(shop, products)}
+            {subhead ?? (shop.policies.notes || shopNote(shop, products))}
           </p>
           <div className="mt-8 flex flex-wrap items-center gap-x-6 gap-y-3">
             <a
@@ -278,7 +294,7 @@ export function IntroStrip({
               className="rounded-[2px] px-5 py-3 text-[12px] font-medium text-white transition-transform duration-300 hover:-translate-y-0.5"
               style={{ backgroundColor: ink }}
             >
-              Browse the catalog
+              {ctaLabel ?? 'Browse the catalog'}
             </a>
             <span className="text-[10px] uppercase tracking-[0.2em]" style={{ color: muted }}>
               {shop.deliveryRules.zones[0]
@@ -312,12 +328,18 @@ export function CollageHero({
   decor,
   primary,
   font,
+  headline,
+  subhead,
+  ctaLabel,
 }: {
   shop: Shop;
   products: readonly ProductPublic[];
   decor: DecorSet;
   primary: string;
   font?: string;
+  headline?: string;
+  subhead?: string;
+  ctaLabel?: string;
 }) {
   // Real catalogue photography leads; the curated set is the fallback.
   const hero = products.find((product) => product.images[0])?.images[0] ?? decor.hero;
@@ -341,11 +363,14 @@ export function CollageHero({
           className="max-w-[16ch] text-[clamp(2.7rem,7.2vw,6.2rem)] font-medium leading-[0.94] tracking-[-0.02em]"
           style={{ fontFamily: font }}
         >
-          {shop.description || shop.name}
+          {headline ?? (shop.description || shop.name)}
         </h1>
+        {subhead ? (
+          <p className="mt-4 max-w-md text-[13px] leading-relaxed text-white/70">{subhead}</p>
+        ) : null}
         <div className="mt-8 flex flex-wrap items-center gap-x-8 gap-y-3">
           <a href="#catalog" className="es-link text-[13px] font-medium tracking-wide">
-            Shop the collection
+            {ctaLabel ?? 'Shop the collection'}
           </a>
           <span className="text-[10px] uppercase tracking-[0.2em] text-white/50">
             {products.length} pieces · COD
@@ -375,6 +400,8 @@ export function EditorialHero({
   ink,
   muted,
   font,
+  headline,
+  subhead,
 }: {
   shop: Shop;
   products: readonly ProductPublic[];
@@ -383,6 +410,8 @@ export function EditorialHero({
   ink: string;
   muted: string;
   font?: string;
+  headline?: string;
+  subhead?: string;
 }) {
   const main = productImage(products) ?? decor.hero;
   const looks = [
@@ -402,12 +431,12 @@ export function EditorialHero({
             className="max-w-[20ch] text-[clamp(2.6rem,7vw,5.4rem)] leading-[0.96] tracking-[-0.015em]"
             style={{ fontFamily: font, color: ink }}
           >
-            {shop.description || shop.name}
+            {headline ?? (shop.description || shop.name)}
           </h1>
         </div>
         <div className="lg:col-span-4">
           <p className="max-w-xs text-[12px] leading-relaxed lg:ml-auto" style={{ color: muted }}>
-            {shop.policies.notes || shopNote(shop, products)}
+            {subhead ?? (shop.policies.notes || shopNote(shop, products))}
           </p>
           <a
             href="#catalog"
@@ -642,11 +671,13 @@ export function StoryBand({
   decor,
   primary,
   font,
+  story,
 }: {
   shop: Shop;
   decor: DecorSet;
   primary: string;
   font?: string;
+  story?: string;
 }) {
   const zones = shop.deliveryRules.zones;
   return (
@@ -668,7 +699,7 @@ export function StoryBand({
             className="mt-6 max-w-md text-[clamp(1.35rem,2.4vw,1.9rem)] italic leading-[1.35] text-white/90"
             style={{ fontFamily: font }}
           >
-            {shop.policies.notes || shop.description || 'A small shop, run with care.'}
+            {story ?? (shop.policies.notes || shop.description || 'A small shop, run with care.')}
           </p>
           {shop.policies.returnPolicy ? (
             <p className="mt-5 max-w-sm text-[12px] leading-relaxed text-white/45">

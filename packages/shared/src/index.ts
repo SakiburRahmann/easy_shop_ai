@@ -148,6 +148,206 @@ export const shopPoliciesSchema = z.object({
   notes: z.string().max(2000).optional(),
 });
 
+/* -------------------------------------------------------------------------- */
+/* Storefront themes (Shopify/Odoo model: presets + settings, no codegen)     */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * A storefront is a THEME PRESET applied to a shop, exactly like Shopify's
+ * JSON templates + theme settings or Odoo's theme modules + snippets.
+ *
+ * There is no code generation anywhere in this path: a preset is a small,
+ * validated document (composition + palette + type + short copy) and our
+ * section kit renders it. The seller browses the library and picks; the server
+ * repairs the applied document so an impossible value can never reach the page.
+ *
+ * Every enum below maps to a component variant that already exists — adding a
+ * theme means adding a preset entry, never new rendering code.
+ */
+export const themeHeaderSchema = z.enum(['compact', 'overlay', 'masthead']);
+export type ThemeHeader = z.infer<typeof themeHeaderSchema>;
+
+export const themeHeroSchema = z.enum(['browse', 'collage', 'editorial']);
+export type ThemeHero = z.infer<typeof themeHeroSchema>;
+
+export const themeCatalogSchema = z.enum(['dense', 'gallery', 'atelier']);
+export type ThemeCatalog = z.infer<typeof themeCatalogSchema>;
+
+export const themeDisplaySchema = z.enum(['neutral', 'grotesque', 'serif']);
+export type ThemeDisplay = z.infer<typeof themeDisplaySchema>;
+
+export const themeDensitySchema = z.enum(['airy', 'balanced', 'compact']);
+export type ThemeDensity = z.infer<typeof themeDensitySchema>;
+
+export const themeNavSchema = z.enum(['categories', 'collections', 'none']);
+export type ThemeNav = z.infer<typeof themeNavSchema>;
+
+export const themeRadiusSchema = z.enum(['sharp', 'soft', 'round']);
+export type ThemeRadius = z.infer<typeof themeRadiusSchema>;
+
+/** Ordered home sections a theme may compose. `catalog` appears exactly once. */
+export const THEME_SECTION_IDS = [
+  'announcement',
+  'intro',
+  'hero',
+  'categoryCollage',
+  'categoryIndex',
+  'rail',
+  'catalog',
+  'story',
+  'trust',
+  'policies',
+] as const;
+export const themeSectionIdSchema = z.enum(THEME_SECTION_IDS);
+export type ThemeSectionId = z.infer<typeof themeSectionIdSchema>;
+
+/** Composition: which blocks, in what order, and how they are presented. */
+export const themeLayoutSchema = z.object({
+  header: themeHeaderSchema,
+  hero: themeHeroSchema,
+  catalog: themeCatalogSchema,
+  display: themeDisplaySchema,
+  density: themeDensitySchema,
+  nav: themeNavSchema,
+  sections: z.array(themeSectionIdSchema).min(3).max(10),
+});
+export type ThemeLayout = z.infer<typeof themeLayoutSchema>;
+
+/** Palette and typography. Colours are validated; contrast is repaired server-side. */
+export const themeTokensSchema = z.object({
+  primary: hexColorSchema,
+  accent: hexColorSchema,
+  surface: hexColorSchema,
+  ink: hexColorSchema,
+  muted: hexColorSchema,
+  font: z.enum(['sans', 'serif']),
+  radius: themeRadiusSchema,
+});
+export type ThemeTokens = z.infer<typeof themeTokensSchema>;
+
+/** Short shop copy. Plain text; the renderer escapes it and never trusts HTML. */
+export const themeCopySchema = z.object({
+  announcement: z.string().max(120).optional(),
+  headline: z.string().min(1).max(90),
+  subhead: z.string().max(180).optional(),
+  story: z.string().max(400).optional(),
+  ctaLabel: z.string().max(32),
+});
+export type ThemeCopy = z.infer<typeof themeCopySchema>;
+
+/** What a shop carries once a theme is applied (stored in `shops.storefront`). */
+export const storefrontThemeSchema = z.object({
+  version: z.literal(1),
+  /** Library preset this storefront came from (kept for "switch back" and support). */
+  themeId: z.string().min(1).max(80),
+  layout: themeLayoutSchema,
+  tokens: themeTokensSchema,
+  copy: themeCopySchema,
+  appliedAt: isoDateTimeSchema,
+});
+export type StorefrontTheme = z.infer<typeof storefrontThemeSchema>;
+
+/**
+ * A theme the gallery offers. `layout` and `tokens` are the preset's defaults;
+ * the seller may then override copy and colours on their own shop.
+ */
+export const themePresetSchema = z.object({
+  id: z.string().min(1).max(80),
+  name: z.string().min(1).max(70),
+  /** Library category (fashion, food, admin, …). */
+  category: z.string().min(1).max(40),
+  /** Closest platform business type, used for "recommended for you" ordering. */
+  ourType: businessTypeSchema,
+  /** Style traits extracted from the source design (minimal, dark, serif, …). */
+  style: z.array(z.string().max(24)).max(8),
+  /** Small colour chips for the gallery card. */
+  palette: z.array(hexColorSchema).min(1).max(5),
+  /** Curated presets are hand-tuned and shown first. */
+  curated: z.boolean(),
+  layout: themeLayoutSchema,
+  tokens: themeTokensSchema,
+  /** Default call-to-action used when the shop has no copy yet. */
+  ctaLabel: z.string().max(32),
+});
+export type ThemePreset = z.infer<typeof themePresetSchema>;
+
+export const themeLibraryQuerySchema = z.object({
+  q: z.string().max(120).optional(),
+  category: z.string().max(40).optional(),
+  businessType: businessTypeSchema.optional(),
+  limit: z.coerce.number().int().min(1).max(60).default(24),
+  offset: z.coerce.number().int().min(0).default(0),
+});
+export type ThemeLibraryQuery = z.infer<typeof themeLibraryQuerySchema>;
+
+/** Applying a theme: pick a preset, optionally override copy and colours. */
+export const themeApplyInputSchema = z.object({
+  themeId: z.string().min(1).max(80),
+  copy: themeCopySchema.partial().optional(),
+  tokens: themeTokensSchema.partial().optional(),
+});
+export type ThemeApplyInput = z.infer<typeof themeApplyInputSchema>;
+
+export const themeLibraryPageSchema = z.object({
+  themes: z.array(themePresetSchema),
+  total: z.number().int().min(0),
+  /** Every library category, for the gallery's filter row. */
+  categories: z.array(z.string().max(40)),
+});
+export type ThemeLibraryPage = z.infer<typeof themeLibraryPageSchema>;
+
+/**
+ * House presets: the curated starting points every shop can use, and the
+ * deterministic fallback when a library preset cannot be applied.
+ */
+export const THEME_PRESETS = {
+  classic: {
+    header: 'compact',
+    hero: 'browse',
+    catalog: 'dense',
+    display: 'neutral',
+    density: 'balanced',
+    nav: 'categories',
+    sections: ['announcement', 'intro', 'catalog', 'trust', 'policies'],
+    surface: '#ffffff',
+    ink: '#111214',
+    muted: '#6d7076',
+    accent: '#f59e0b',
+    radius: 'sharp',
+    font: 'sans',
+  },
+  modern: {
+    header: 'overlay',
+    hero: 'collage',
+    catalog: 'gallery',
+    display: 'grotesque',
+    density: 'airy',
+    nav: 'categories',
+    sections: ['hero', 'categoryCollage', 'rail', 'catalog', 'story', 'trust'],
+    surface: '#f4f4f3',
+    ink: '#0d0e10',
+    muted: '#5c6066',
+    accent: '#f59e0b',
+    radius: 'soft',
+    font: 'sans',
+  },
+  boutique: {
+    header: 'masthead',
+    hero: 'editorial',
+    catalog: 'atelier',
+    display: 'serif',
+    density: 'airy',
+    nav: 'collections',
+    sections: ['hero', 'categoryIndex', 'catalog', 'story', 'policies'],
+    surface: '#ffffff',
+    ink: '#171512',
+    muted: '#7b746b',
+    accent: '#c9a227',
+    radius: 'sharp',
+    font: 'serif',
+  },
+} as const satisfies Record<TemplateId, Record<string, unknown>>;
+
 export const shopSchema = z.object({
   id: uuidSchema,
   ownerId: uuidSchema,
@@ -162,6 +362,8 @@ export const shopSchema = z.object({
   /** Delivery zones with charges; empty = shop has no detail yet. */
   deliveryRules: z.object({ zones: z.array(deliveryZoneSchema).max(20) }),
   policies: shopPoliciesSchema,
+  /** Applied theme preset; absent = use the `templateId` house preset. */
+  storefront: storefrontThemeSchema.nullish(),
   createdAt: isoDateTimeSchema,
   updatedAt: isoDateTimeSchema,
 });

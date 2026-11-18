@@ -33,6 +33,7 @@ import {
   useBodyScrollLock,
 } from '@/components/ui';
 import { TEMPLATE_VISUALS, storefrontFont } from '@/components/storefront/templates';
+import { visualsFromStorefront } from '@/components/storefront/theme';
 import { decorFor } from '@/components/storefront/decor';
 import { StorefrontHeader } from '@/components/storefront/header';
 import { StorefrontCatalog } from '@/components/storefront/catalog';
@@ -286,10 +287,18 @@ export default function Storefront() {
     );
   }
 
-  const preset = TEMPLATE_VISUALS[data.shop.templateId];
-  const primary = data.shop.theme.primaryColor ?? '#059669';
-  const accent = data.shop.theme.accentColor ?? '#F59E0B';
-  const font = storefrontFont(data.shop.theme.font, preset.display);
+  // A shop with an applied theme renders that preset; everyone else keeps the
+  // template preset. Both paths use the same section kit.
+  const storefront = data.shop.storefront ?? null;
+  const preset = storefront
+    ? visualsFromStorefront(storefront)
+    : TEMPLATE_VISUALS[data.shop.templateId];
+  const primary = storefront?.tokens.primary ?? data.shop.theme.primaryColor ?? '#059669';
+  const accent = storefront?.tokens.accent ?? data.shop.theme.accentColor ?? '#F59E0B';
+  const font = storefrontFont(storefront?.tokens.font ?? data.shop.theme.font, preset.display);
+  const radius = storefront?.tokens.radius;
+  const density = storefront?.layout.density;
+  const copy = storefront?.copy;
   const ink = preset.ink;
   const muted = preset.muted;
   const decor = decorFor(data.shop);
@@ -303,6 +312,8 @@ export default function Storefront() {
     <div
       className="flex min-h-full flex-1 flex-col"
       style={{ backgroundColor: preset.surface, color: ink }}
+      data-es-radius={radius}
+      data-es-density={density}
     >
       <StorefrontHeader
         data={data}
@@ -319,7 +330,14 @@ export default function Storefront() {
       {preset.sections.map((section) => {
         switch (section) {
           case 'announcement':
-            return <AnnouncementBar key="announcement" shop={data.shop} primary={primary} />;
+            return (
+              <AnnouncementBar
+                key="announcement"
+                shop={data.shop}
+                primary={primary}
+                {...(copy?.announcement ? { announcement: copy.announcement } : {})}
+              />
+            );
           case 'intro':
             return (
               <IntroStrip
@@ -331,6 +349,9 @@ export default function Storefront() {
                 ink={ink}
                 muted={muted}
                 font={font}
+                {...(copy?.headline ? { headline: copy.headline } : {})}
+                {...(copy?.subhead ? { subhead: copy.subhead } : {})}
+                {...(copy?.ctaLabel ? { ctaLabel: copy.ctaLabel } : {})}
               />
             );
           case 'hero':
@@ -342,6 +363,9 @@ export default function Storefront() {
                 decor={decor}
                 primary={primary}
                 font={font}
+                {...(copy?.headline ? { headline: copy.headline } : {})}
+                {...(copy?.subhead ? { subhead: copy.subhead } : {})}
+                {...(copy?.ctaLabel ? { ctaLabel: copy.ctaLabel } : {})}
               />
             ) : (
               <EditorialHero
@@ -353,6 +377,8 @@ export default function Storefront() {
                 ink={ink}
                 muted={muted}
                 font={font}
+                {...(copy?.headline ? { headline: copy.headline } : {})}
+                {...(copy?.subhead ? { subhead: copy.subhead } : {})}
               />
             );
           case 'categoryCollage':
@@ -410,7 +436,14 @@ export default function Storefront() {
             );
           case 'story':
             return (
-              <StoryBand key="story" shop={data.shop} decor={decor} primary={primary} font={font} />
+              <StoryBand
+                key="story"
+                shop={data.shop}
+                decor={decor}
+                primary={primary}
+                font={font}
+                {...(copy?.story ? { story: copy.story } : {})}
+              />
             );
           case 'trust':
             return (

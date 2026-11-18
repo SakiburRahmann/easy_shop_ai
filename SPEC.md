@@ -90,11 +90,15 @@ Seller app → Mobile (Expo) ────────┘        │
 - **Auth:** one Supabase account system; the same login works on web and mobile.
 - **Multi-tenancy:** every table has `shop_id`, every query is filtered server-side. AI tools are
   scoped to a server-set shop ID.
-- **Templates:** three visually distinct storefront shells composed from a shared section registry
-  (`apps/web/src/components/storefront/sections.tsx`). Each preset in `templates.ts` declares an
-  ordered section list, header style and catalog presentation, so templates differ by composition
-  and merchandising hierarchy — not by colour. Adding a template = adding a preset entry and a DB
-  constraint value, not generating code.
+- **Themes, not generated sites:** a storefront is a THEME PRESET applied to a shop — the
+  Shopify/Odoo model. A preset is a validated document (composition, palette, typography, short
+  copy) rendered by the shared section registry
+  (`apps/web/src/components/storefront/sections.tsx`). Sellers browse the library
+  (`GET /themes`) and pick; the platform never generates storefront code at request time. The
+  library is derived deterministically from the design metadata in the vendored template
+  archives (`apps/api/scripts/build-design-catalog.mjs` → `design-catalog.generated.ts`, ~200
+  records) plus three curated house presets. Adding a theme = adding a preset entry, never new
+  rendering code.
 - **Monorepo:** pnpm workspaces + Turborepo, `apps/web`, `apps/mobile`, `apps/api`,
   `packages/shared`.
 
@@ -117,7 +121,7 @@ Seller app → Mobile (Expo) ────────┘        │
 
 ```
 users          (id, email, role, created_at)
-shops          (id, owner_id, name, slug, business_type, logo, template_id, theme, contact, delivery_rules, policies)
+shops          (id, owner_id, name, slug, business_type, logo, template_id, theme, storefront, contact, delivery_rules, policies)
 categories     (id, shop_id, name)
 products       (id, shop_id, name, description, category_id, price, floor_price, stock, images, active)
 variants       (id, product_id, size, color, stock, price_override)
@@ -133,7 +137,12 @@ Order statuses: `pending → confirmed → shipped → delivered` (+ `cancelled`
 
 `business_type` is one of `fashion | electronics | beauty | groceries | home | kids | other`.
 `template_id` is one of `classic | modern | boutique`. `theme` is JSONB with optional
-`primaryColor`, `accentColor` and `font` (`sans | serif`). Variant stock is reserved atomically when
+`primaryColor`, `accentColor` and `font` (`sans | serif`), kept in sync for marketplace cards.
+`storefront` is the applied theme document (JSONB, `StorefrontTheme` in `packages/shared`):
+`themeId`, `layout` (header/hero/catalog/display/density/nav + ordered sections), `tokens`
+(palette, font, radius), `copy` (headline, subhead, announcement, story, ctaLabel) and
+`appliedAt`. Null means the shop still renders its `template_id` house preset; invalid rows are
+rejected on read and degrade to that preset. Variant stock is reserved atomically when
 an order is placed (`adjust_variant_stock` SQL function) and restored when an order is cancelled.
 Products without variants use their own `stock` column and the matching
 `adjust_product_stock` function; variant products ignore it.
@@ -154,16 +163,22 @@ Products without variants use their own `stock` column and the matching
   has zones; the server prices every line and the delivery charge
 - Storefront URL on the static site: `/s?shop=<slug>` (Cloudflare Pages normalizes deep `/s/<slug>`
   paths to `/s`; the shell reads the slug from the query)
-- Templates render distinct storefront compositions, all sharing one catalog, cart, COD checkout
+- Themes render distinct storefront compositions, all sharing one catalog, cart, COD checkout
   and AI agent: `classic` (announcement bar → intro → dense grid → trust → policies), `modern`
   (dark collage hero → category mosaic → product rail → gallery → story → trust) and `boutique`
-  (editorial hero with image band → numbered category index → two-column atelier → story → policies)
+  (editorial hero with image band → category index → two-column atelier → story → policies)
+- `GET /themes` — public theme library (`?q=&category=&businessType=&limit=&offset=`); returns
+  presets (layout, tokens, palette, style traits, curated flag), the total and the category list
+- `GET /themes/:themeId` — one preset, used by the gallery preview
 
 **Seller**
 
 - `POST /auth/signup`, `POST /auth/login`, `GET /auth/me` — session and associated shop
 - `POST /shops` — create the shop from the builder (business type seeds starter categories),
   `GET/PATCH /shops/:id`
+- `PATCH /shops/:id/storefront` — apply a theme preset, with optional copy and colour overrides;
+  the server repairs contrast and impossible sections, then stores the document and syncs
+  `template_id`/`theme`
 - `POST /shops/:id/categories`, `PATCH/DELETE /categories/:id`
 - `GET/POST /shops/:id/products`, `PATCH/DELETE /products/:id`, `POST /products/:id/variants`,
   `PATCH/DELETE /variants/:id`
