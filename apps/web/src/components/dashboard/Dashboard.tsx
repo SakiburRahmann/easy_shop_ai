@@ -55,9 +55,10 @@ const DEFAULT_ZONES: DeliveryZone[] = [
 export type Api = <T>(path: string, options?: { method?: string; body?: unknown }) => Promise<T>;
 
 export default function Dashboard() {
-  const [ready, setReady] = useState(
-    () => typeof window === 'undefined' || !window.localStorage.getItem(TOKEN_KEY),
-  );
+  // Always start "not ready": the first paint is a spinner on both the server
+  // (static export) and the client, so hydration never mismatches. The session
+  // restore below is the only thing that can flip this.
+  const [ready, setReady] = useState(false);
   const [session, setSession] = useState<Session | null>(null);
   const [shop, setShop] = useState<Shop | null>(null);
   const [tab, setTab] = useState<'products' | 'orders' | 'chats' | 'theme' | 'settings'>(
@@ -90,8 +91,20 @@ export default function Dashboard() {
 
   useEffect(() => {
     const token = window.localStorage.getItem(TOKEN_KEY);
-    if (!token || !ready) return;
     let cancelled = false;
+
+    const finish = () => {
+      if (!cancelled) setReady(true);
+    };
+
+    if (!token) {
+      // Microtask, not a synchronous write inside the effect.
+      void Promise.resolve().then(finish);
+      return () => {
+        cancelled = true;
+      };
+    }
+
     api<unknown>('/auth/me', { token })
       .then((raw) => {
         if (cancelled) return;
@@ -101,17 +114,21 @@ export default function Dashboard() {
           setShop(r.shop ?? null);
         } else {
           window.localStorage.removeItem(TOKEN_KEY);
-          setReady(true);
+          window.localStorage.removeItem(USER_KEY);
         }
       })
-      .catch((err) => {
-        if (!(err instanceof ApiError)) window.localStorage.removeItem(TOKEN_KEY);
-        setReady(true);
-      });
+      .catch(() => {
+        // Expired/invalid token: forget it and show the login form instead of
+        // retrying forever behind the loading spinner.
+        if (cancelled) return;
+        window.localStorage.removeItem(TOKEN_KEY);
+        window.localStorage.removeItem(USER_KEY);
+      })
+      .finally(finish);
     return () => {
       cancelled = true;
     };
-  }, [ready]);
+  }, []);
 
   const afterLogin = (s: Session) => {
     window.localStorage.setItem(TOKEN_KEY, s.accessToken);
