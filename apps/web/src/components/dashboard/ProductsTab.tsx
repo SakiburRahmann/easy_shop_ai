@@ -13,7 +13,7 @@ import {
   storefrontSchema,
   uploadResultSchema,
 } from '@easyshop/shared';
-import { api, taka } from '@/lib/api';
+import { api, money } from '@/lib/api';
 import {
   Badge,
   Button,
@@ -301,8 +301,8 @@ function ProductRow({
         <div className="flex min-w-40 flex-1 flex-col">
           <span className="text-sm font-medium">{product.name}</span>
           <span className="text-xs text-zinc-500">
-            <span className="font-semibold text-zinc-700">{taka(product.price)}</span> · floor{' '}
-            {taka(product.floorPrice)} · stock {stock}
+            <span className="font-semibold text-zinc-700">{money(product.price)}</span> · floor{' '}
+            {money(product.floorPrice)} · stock {stock}
           </span>
         </div>
         {product.active ? (
@@ -444,7 +444,7 @@ function ProductDetails({
   return (
     <div className="flex flex-col gap-3 border-t border-zinc-100 bg-zinc-50 p-3 text-sm">
       <div className="grid gap-3 sm:grid-cols-3">
-        <Field label="Price (৳)">
+        <Field label="Price ($)">
           <input
             value={price}
             onChange={(e) => setPrice(e.target.value)}
@@ -453,7 +453,7 @@ function ProductDetails({
             className={inputClass}
           />
         </Field>
-        <Field label="Floor price (৳)" hint="Secret bargaining limit — shown to nobody">
+        <Field label="Floor price ($)" hint="Secret bargaining limit — shown to nobody">
           <input
             value={floor}
             onChange={(e) => setFloor(e.target.value)}
@@ -531,7 +531,7 @@ function ProductDetails({
                   }}
                 />
                 {v.priceOverride !== null && v.priceOverride !== undefined ? (
-                  <Badge>{taka(v.priceOverride)}</Badge>
+                  <Badge>{money(v.priceOverride)}</Badge>
                 ) : null}
                 <Button
                   variant="danger"
@@ -649,7 +649,7 @@ function CreateProductModal({
           />
         </Field>
         <div className="grid gap-3 sm:grid-cols-3">
-          <Field label="Price (৳)">
+          <Field label="Price ($)">
             <input
               type="number"
               min={0}
@@ -659,7 +659,7 @@ function CreateProductModal({
               required
             />
           </Field>
-          <Field label="Floor price (৳)" hint="Offers below this are auto-rejected by the server">
+          <Field label="Floor price ($)" hint="Offers below this are auto-rejected by the server">
             <input
               type="number"
               min={0}

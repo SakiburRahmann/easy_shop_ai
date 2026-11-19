@@ -1,393 +1,307 @@
 'use client';
 
 /**
- * Marketplace landing: customers discover shops AND products across every
- * EasyShopAI store. Both searches go through the public API; floor prices and
- * AI rule settings never appear in either contract.
+ * Marketplace home, rebuilt against the reference: pale-blue hero band with the
+ * headline, shopper photo and mint seller card; the ten-tile category rail; and
+ * a six-up featured row. All product, shop and price data comes from the API.
  */
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import {
   BUSINESS_TYPE_PRESETS,
-  STOREFRONT_TEMPLATES,
   marketplaceProductSchema,
   shopDirectoryItemSchema,
+  type BusinessType,
   type MarketplaceProduct,
   type ShopDirectoryItem,
 } from '@easyshop/shared';
-import { api, taka } from '@/lib/api';
-import { Skeleton } from '@/components/ui';
+import { api } from '@/lib/api';
 import { Icon } from '@/lib/icons';
+import { Skeleton } from '@/components/ui';
+import { SiteFooter, SiteHeader } from '@/components/site/header';
+import { ProductTile } from '@/components/market/product-tile';
 
-type Mode = 'shops' | 'products';
+const CATEGORY_MEDIA: Record<BusinessType, { image?: string; tint: string }> = {
+  electronics: { image: '/images/cat-electronics.jpg', tint: '#eef1f7' },
+  home: { image: '/images/cat-home.jpg', tint: '#f0ebe3' },
+  fashion: { image: '/images/cat-fashion.jpg', tint: '#e7eef7' },
+  beauty: { image: '/images/cat-beauty.jpg', tint: '#f8efea' },
+  groceries: { image: '/images/cat-groceries.jpg', tint: '#eaf2ea' },
+  kids: { tint: '#f6eaea' },
+  other: { tint: '#f1f2f6' },
+};
+
+const CATEGORY_LABEL: Record<BusinessType, string> = {
+  electronics: 'Electronics',
+  home: 'Home',
+  fashion: 'Fashion',
+  beauty: 'Beauty',
+  groceries: 'Groceries',
+  kids: 'Kids',
+  other: 'More',
+};
 
 export default function Marketplace() {
-  const [mode, setMode] = useState<Mode>('shops');
-  const [q, setQ] = useState('');
   const [shops, setShops] = useState<ShopDirectoryItem[] | null>(null);
   const [products, setProducts] = useState<MarketplaceProduct[] | null>(null);
-  const [error, setError] = useState(false);
-  const requestRef = useRef(0);
-
-  const search = async (nextMode: Mode, query: string) => {
-    const requestId = ++requestRef.current;
-    setMode(nextMode);
-    setError(false);
-    if (nextMode === 'shops') setShops(null);
-    else setProducts(null);
-
-    const sp = new URLSearchParams({ limit: '24' });
-    if (query.trim()) sp.set('q', query.trim());
-
-    try {
-      if (nextMode === 'shops') {
-        const raw = await api<unknown[]>(`/shops?${sp.toString()}`);
-        const items: ShopDirectoryItem[] = [];
-        for (const row of raw) {
-          const parsed = shopDirectoryItemSchema.safeParse(row);
-          if (parsed.success) items.push(parsed.data);
-        }
-        if (requestRef.current === requestId) setShops(items);
-      } else {
-        const raw = await api<unknown[]>(`/search/products?${sp.toString()}`);
-        const items: MarketplaceProduct[] = [];
-        for (const row of raw) {
-          const parsed = marketplaceProductSchema.safeParse(row);
-          if (parsed.success) items.push(parsed.data);
-        }
-        if (requestRef.current === requestId) setProducts(items);
-      }
-    } catch {
-      if (requestRef.current === requestId) {
-        setError(true);
-        if (nextMode === 'shops') setShops([]);
-        else setProducts([]);
-      }
-    }
-  };
+  const [failed, setFailed] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
-    const requestId = ++requestRef.current;
-    api<unknown[]>('/shops?limit=24')
-      .then((raw) => {
-        if (cancelled || requestRef.current !== requestId) return;
-        const items: ShopDirectoryItem[] = [];
-        for (const row of raw) {
-          const parsed = shopDirectoryItemSchema.safeParse(row);
-          if (parsed.success) items.push(parsed.data);
-        }
-        setShops(items);
-      })
-      .catch(() => {
+    Promise.all([api<unknown[]>('/shops?limit=50'), api<unknown[]>('/search/products?limit=12')])
+      .then(([shopRows, productRows]) => {
         if (cancelled) return;
-        setError(true);
-        setShops([]);
-      });
+        setShops(
+          shopRows.flatMap((row) => {
+            const parsed = shopDirectoryItemSchema.safeParse(row);
+            return parsed.success ? [parsed.data] : [];
+          }),
+        );
+        setProducts(
+          productRows.flatMap((row) => {
+            const parsed = marketplaceProductSchema.safeParse(row);
+            return parsed.success ? [parsed.data] : [];
+          }),
+        );
+      })
+      .catch(() => !cancelled && setFailed(true));
     return () => {
       cancelled = true;
     };
   }, []);
 
-  const loading = mode === 'shops' ? shops === null : products === null;
+  const categories = useMemo(
+    () =>
+      (Object.keys(BUSINESS_TYPE_PRESETS) as BusinessType[])
+        .filter((type) => type !== 'other')
+        .map((type) => ({ type })),
+    [],
+  );
 
   return (
-    <div className="flex flex-1 flex-col bg-[#f7f7f6]">
-      <header className="sticky top-0 z-30 border-b border-zinc-200/70 bg-white/80 backdrop-blur">
-        <div className="mx-auto flex w-full max-w-6xl items-center gap-3 px-5 py-3.5">
-          <Link href="/" className="flex items-center gap-2">
-            <span className="text-[17px] font-semibold tracking-[-0.01em]">
-              Easy<span className="text-brand-600">Shop</span>AI
-            </span>
-          </Link>
-          <nav className="ml-auto flex items-center gap-2">
-            <Link
-              href="/dashboard"
-              className="hidden text-sm text-zinc-600 underline decoration-zinc-300 underline-offset-4 transition hover:decoration-zinc-900 sm:block"
-            >
-              Seller sign in
-            </Link>
-            <Link
-              href="/dashboard"
-              className="bg-zinc-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-zinc-700"
-            >
-              Open a shop
-            </Link>
-          </nav>
-        </div>
-      </header>
+    <div className="flex min-h-full flex-1 flex-col bg-white">
+      <SiteHeader />
 
-      <section className="border-b border-zinc-200/70 bg-white">
-        <div className="relative mx-auto grid w-full max-w-6xl gap-7 px-5 pb-12 pt-14 sm:pt-20">
-          <p className="text-[11px] font-medium uppercase tracking-[0.18em] text-zinc-500">
-            Marketplace <span className="px-1 text-zinc-300">/</span> {shops?.length ?? 0} shop
-            {shops?.length === 1 ? '' : 's'} listing now
-          </p>
-          <h1 className="max-w-[26ch] text-[36px] font-semibold leading-[1.04] tracking-[-0.03em] text-zinc-900 sm:text-[56px]">
-            Every shop keeps its own counter, and answers its own questions.
-          </h1>
-          <p className="max-w-[58ch] text-[15px] leading-relaxed text-zinc-600">
-            Sellers list what they actually stock. Prices, delivery charges and cash-on-delivery
-            orders come from that same list. Ask a shop in Bangla, English or Banglish and it
-            answers from there.
-          </p>
-
-          <form
-            className="flex w-full max-w-3xl flex-col border border-zinc-300 bg-white sm:flex-row sm:items-stretch"
-            onSubmit={(e) => {
-              e.preventDefault();
-              void search(mode, q);
-            }}
-          >
-            <div className="flex shrink-0 border-b border-zinc-200 sm:border-b-0 sm:border-r">
-              {(
-                [
-                  ['shops', 'Shops'],
-                  ['products', 'Products'],
-                ] as const
-              ).map(([key, label]) => (
-                <button
-                  key={key}
-                  type="button"
-                  onClick={() => void search(key, q)}
-                  className={`px-4 py-3 text-[11px] font-medium uppercase tracking-[0.16em] transition ${
-                    mode === key
-                      ? 'text-zinc-900 underline decoration-zinc-900 decoration-2 underline-offset-[6px]'
-                      : 'text-zinc-400 hover:text-zinc-700'
-                  }`}
+      <main className="flex-1">
+        {/* ───────────────────────────── hero ───────────────────────────── */}
+        <section className="bg-wash-blue">
+          <div className="mx-auto grid w-full max-w-[1120px] items-center gap-8 px-5 py-10 lg:grid-cols-[minmax(0,1fr)_minmax(0,0.92fr)_280px] lg:gap-6 lg:py-9">
+            <div>
+              <h1 className="max-w-[9ch] text-[clamp(2.5rem,4.8vw,3.15rem)] font-extrabold leading-[1.02] tracking-[-0.045em] text-ink">
+                Find what you need
+              </h1>
+              <p className="mt-4 max-w-[34ch] text-[14.5px] leading-[1.55] text-[#5d6474]">
+                Shop from thousands of independent stores and unique brands, all in one place.
+              </p>
+              <div className="mt-6 flex flex-wrap items-center gap-3">
+                <Link
+                  href="/search"
+                  className="inline-flex h-11 items-center gap-2 rounded-lg bg-brand-600 px-5 text-[13px] font-semibold text-white transition hover:bg-brand-700"
                 >
-                  {label}
-                </button>
-              ))}
-            </div>
-            <div className="flex flex-1 items-center gap-2 px-3">
-              <Icon.Search size={16} className="shrink-0 text-zinc-400" />
-              <input
-                value={q}
-                onChange={(e) => setQ(e.target.value)}
-                placeholder={mode === 'shops' ? 'Shop name or type' : 'Product or brand'}
-                className="h-12 flex-1 bg-transparent text-sm outline-none placeholder:text-zinc-400"
-              />
-            </div>
-            <button
-              type="submit"
-              className="h-12 shrink-0 bg-zinc-900 px-6 text-[13px] font-medium text-white transition hover:bg-zinc-700"
-            >
-              Search
-            </button>
-          </form>
-
-          <div className="flex flex-wrap items-center gap-x-6 gap-y-2 text-[13px] text-zinc-600">
-            <button
-              onClick={() => void search('products', '')}
-              className="underline decoration-zinc-300 underline-offset-4 transition hover:decoration-zinc-900"
-            >
-              Browse every product
-            </button>
-            <Link
-              href="/dashboard"
-              className="underline decoration-zinc-300 underline-offset-4 transition hover:decoration-zinc-900"
-            >
-              Open a shop
-            </Link>
-          </div>
-        </div>
-      </section>
-
-      <main className="mx-auto w-full max-w-6xl flex-1 px-5 py-12">
-        <div className="mb-5 flex flex-wrap items-end justify-between gap-3">
-          <div>
-            <h2 className="text-[11px] font-medium uppercase tracking-[0.18em] text-zinc-500">
-              {mode === 'shops' ? 'Shops' : 'Products'}
-              {q ? <span className="normal-case tracking-normal text-zinc-500"> “{q}”</span> : null}
-            </h2>
-            <p className="mt-2 text-sm text-zinc-600">
-              {mode === 'shops'
-                ? 'Open a shop to see its catalogue, delivery charges and chat.'
-                : 'Each result is live stock from one shop; open it to buy there.'}
-            </p>
-          </div>
-          {!loading && !error ? (
-            <span className="text-[11px] uppercase tracking-[0.16em] text-zinc-400">
-              {(mode === 'shops' ? shops?.length : products?.length) ?? 0} listed
-            </span>
-          ) : null}
-        </div>
-
-        {loading ? (
-          <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
-            {[0, 1, 2, 3, 4, 5].map((index) => (
-              <div key={index} className="border border-zinc-200 bg-white">
-                <Skeleton className="aspect-[16/10] w-full rounded-none" />
-                <div className="flex flex-col gap-2.5 p-5">
-                  <Skeleton className="h-4 w-2/3" />
-                  <Skeleton className="h-3 w-full" />
-                  <Skeleton className="h-3 w-3/5" />
-                </div>
+                  Start shopping
+                  <Icon.ArrowRight size={15} />
+                </Link>
+                <Link
+                  href="/dashboard"
+                  className="inline-flex h-11 items-center rounded-lg border border-brand-500/70 px-5 text-[13px] font-semibold text-brand-600 transition hover:bg-white/70"
+                >
+                  Create your store
+                </Link>
               </div>
-            ))}
-          </div>
-        ) : error ? (
-          <p className="flex items-start gap-2 border-l-2 border-red-500 bg-red-50/60 px-3 py-2.5 text-sm text-red-700">
-            <Icon.Alert size={15} className="mt-0.5 shrink-0" />
-            Could not reach EasyShopAI. Refresh to retry.
-          </p>
-        ) : mode === 'shops' && !shops?.length ? (
-          <EmptyResult
-            title={q ? `No shops matching “${q}”` : 'No shops yet'}
-            body="Nothing here yet. Shops appear once a seller adds products."
-          />
-        ) : mode === 'products' && !products?.length ? (
-          <EmptyResult
-            title={q ? `No products matching “${q}”` : 'No products yet'}
-            body="Shops are still stocking their shelves. Try another search, or open your own store."
-          />
-        ) : mode === 'shops' ? (
-          <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
-            {shops?.map((shop) => (
-              <a key={shop.id} href={`/s?shop=${shop.slug}`} className="group flex flex-col">
-                <div className="relative aspect-[4/3] w-full overflow-hidden bg-zinc-100">
-                  {shop.topImages.length > 1 ? (
-                    <div className="grid h-full w-full grid-cols-2 gap-px">
-                      {shop.topImages.slice(0, 4).map((image, index) => (
-                        <img
-                          key={index}
-                          src={image}
-                          alt=""
-                          className="h-full w-full object-cover transition duration-[900ms] ease-out group-hover:scale-[1.04]"
-                        />
-                      ))}
-                    </div>
-                  ) : shop.topImages[0] ? (
-                    <img
-                      src={shop.topImages[0]}
-                      alt={shop.name}
-                      className="h-full w-full object-cover transition duration-[900ms] ease-out group-hover:scale-[1.04]"
-                    />
-                  ) : (
-                    <div className="flex h-full w-full items-end p-4">
-                      <span className="text-3xl font-semibold text-zinc-300">
-                        {shop.name.slice(0, 1)}
-                      </span>
-                    </div>
-                  )}
-                </div>
-                <div className="mt-3 flex items-baseline justify-between gap-3 border-t border-zinc-200 pt-2.5">
-                  <span className="text-[15px] font-medium text-zinc-900">{shop.name}</span>
-                  <span className="shrink-0 text-[10px] uppercase tracking-[0.14em] text-zinc-400">
-                    {BUSINESS_TYPE_PRESETS[shop.businessType].label}
-                  </span>
-                </div>
-                <p className="mt-1.5 line-clamp-2 text-[13px] leading-relaxed text-zinc-500">
-                  {shop.description ?? 'No description yet.'}
-                </p>
-                <span className="mt-2 text-[12px] text-zinc-500">
-                  {shop.productCount} {shop.productCount === 1 ? 'product' : 'products'}
-                  {shop.contact.phone ? ` · ${shop.contact.phone}` : ''}
-                </span>
-              </a>
-            ))}
-          </div>
-        ) : (
-          <div className="grid gap-x-6 gap-y-10 sm:grid-cols-2 lg:grid-cols-3">
-            {products?.map(({ product, shop, categoryName }) => (
-              <a
-                key={product.id}
-                href={`/s?shop=${shop.slug}&product=${product.id}`}
-                className="group flex flex-col"
-              >
-                <div className="relative aspect-square w-full overflow-hidden bg-zinc-100">
-                  {product.images[0] ? (
-                    <img
-                      src={product.images[0]}
-                      alt={product.name}
-                      className="h-full w-full object-cover transition duration-500 group-hover:scale-[1.04]"
-                    />
-                  ) : (
-                    <div className="flex h-full w-full items-end p-4">
-                      <span className="text-3xl font-semibold text-zinc-300">
-                        {product.name.slice(0, 1)}
-                      </span>
-                    </div>
-                  )}
-                </div>
-                <div className="mt-3 flex items-baseline justify-between gap-3 border-t border-zinc-200 pt-2.5">
-                  <span className="line-clamp-1 text-[15px] font-medium text-zinc-900">
-                    {product.name}
-                  </span>
-                  <span className="shrink-0 text-[13px] text-zinc-900">{taka(product.price)}</span>
-                </div>
-                <span className="mt-1.5 text-[12px] text-zinc-500">
-                  {shop.name}
-                  {categoryName ? ` · ${categoryName}` : ''}
-                </span>
-              </a>
-            ))}
-          </div>
-        )}
-
-        <section className="mt-20 grid gap-10 border-t border-zinc-200 pt-8 sm:grid-cols-3">
-          {[
-            {
-              title: 'One catalogue, two doors',
-              body: 'The storefront and the chat read the same product list, so what a customer is told is what the shop has.',
-            },
-            {
-              title: 'Delivery is a real number',
-              body: 'Zones, charges and delivery days come from the seller, not from a template.',
-            },
-            {
-              title: 'Cash on delivery, in Bangla',
-              body: 'Chats run in Bangla, Banglish or English, and orders arrive with a phone number to confirm.',
-            },
-          ].map((feature) => (
-            <div key={feature.title} className="border-t border-zinc-900/70 pt-3">
-              <h3 className="text-[13px] font-medium text-zinc-900">{feature.title}</h3>
-              <p className="mt-2 text-[13px] leading-relaxed text-zinc-600">{feature.body}</p>
+              <ul className="mt-7 flex flex-wrap gap-x-6 gap-y-2 text-[11.5px] font-medium text-[#6b7280]">
+                <TrustItem icon={<Icon.Shield size={14} />} label="Trusted sellers" />
+                <TrustItem icon={<Icon.Truck size={14} />} label="Secure shopping" />
+                <TrustItem icon={<Icon.Spark size={14} />} label="A bigger tomorrow" />
+              </ul>
             </div>
-          ))}
+
+            <div className="relative hidden h-full min-h-[280px] items-end justify-center self-stretch lg:flex">
+              <div className="h-[292px] [mask-image:radial-gradient(ellipse_at_50%_46%,black_62%,transparent_96%)]">
+                <img
+                  src="/images/hero-shopper.png"
+                  alt="A shopper carrying bags from independent stores"
+                  className="h-full w-auto max-w-full object-contain object-bottom"
+                />
+              </div>
+            </div>
+
+            <div className="flex flex-col">
+              <p className="text-[14.5px] leading-[1.5] text-[#3f4552]">
+                Great products.
+                <br />
+                Brighter businesses.
+                <br />
+                A more open marketplace.
+              </p>
+              <div className="relative mt-5 min-h-[188px] overflow-hidden rounded-xl bg-mint p-5 pr-[80px]">
+                <p className="text-[18px] font-extrabold leading-[1.15] tracking-[-0.03em] text-mint-ink">
+                  Turn your passion
+                  <br />
+                  into a business
+                </p>
+                <p className="mt-2 max-w-[18ch] text-[11px] leading-[1.55] text-mint-ink/75">
+                  Create your store and reach millions of shoppers.
+                </p>
+                <Link
+                  href="/dashboard"
+                  className="mt-4 inline-flex h-9 items-center gap-1.5 whitespace-nowrap rounded-lg bg-[#12463a] px-3.5 text-[11px] font-semibold text-white transition hover:bg-[#0d382e]"
+                >
+                  Create your store
+                  <Icon.ArrowRight size={13} />
+                </Link>
+                <img
+                  src="/images/cat-home.jpg"
+                  alt=""
+                  aria-hidden="true"
+                  className="absolute bottom-3 right-3 h-[92px] w-[72px] rounded-lg object-cover"
+                />
+              </div>
+            </div>
+          </div>
         </section>
 
-        <section className="mt-16 flex flex-col items-start justify-between gap-5 border-t border-zinc-200 pt-8 sm:flex-row sm:items-end">
-          <div>
-            <h3 className="text-2xl font-semibold tracking-[-0.02em] text-zinc-900">
-              Open your shop
-            </h3>
-            <p className="mt-2 max-w-[46ch] text-sm text-zinc-600">
-              Pick a business type, keep the categories that fit, add your products. The storefront,
-              delivery zones and chat are generated from that.
-            </p>
+        {/* ─────────────────────────── categories ───────────────────────── */}
+        <section id="categories" className="mx-auto w-full max-w-[1120px] scroll-mt-24 px-5 pt-9">
+          <div className="flex items-center gap-6">
+            <h2 className="w-[130px] shrink-0 text-[22px] font-extrabold leading-[1.15] tracking-[-0.04em] text-ink">
+              Browse
+              <br />
+              categories
+            </h2>
+            <div className="flex min-w-0 flex-1 gap-3 overflow-x-auto pb-1 [scrollbar-width:none] sm:justify-between">
+              {categories.map(({ type }) => {
+                const media = CATEGORY_MEDIA[type];
+                return (
+                  <Link
+                    key={type}
+                    href={`/search?businessType=${type}`}
+                    className="group flex w-[64px] shrink-0 flex-col items-center gap-2 text-center"
+                  >
+                    <span
+                      className="flex h-[58px] w-[58px] items-center justify-center overflow-hidden rounded-[14px] transition group-hover:-translate-y-0.5"
+                      style={{ backgroundColor: media.tint }}
+                    >
+                      {media.image ? (
+                        <img
+                          src={media.image}
+                          alt=""
+                          className="h-full w-full object-cover"
+                          loading="lazy"
+                        />
+                      ) : (
+                        <Icon.Store size={24} className="text-ink/45" />
+                      )}
+                    </span>
+                    <span className="text-[10.5px] font-medium leading-tight text-ink/80">
+                      {CATEGORY_LABEL[type]}
+                    </span>
+                  </Link>
+                );
+              })}
+            </div>
+            <Link
+              href="/search"
+              aria-label="Browse all products"
+              className="hidden h-8 w-8 shrink-0 items-center justify-center rounded-full border border-line text-ink/60 transition hover:border-brand-300 hover:text-brand-600 sm:flex"
+            >
+              <Icon.ArrowRight size={14} />
+            </Link>
           </div>
-          <Link
-            href="/dashboard"
-            className="shrink-0 border-b border-zinc-900 pb-0.5 text-sm font-medium text-zinc-900"
-          >
-            Start with a template
-          </Link>
+        </section>
+
+        {/* ───────────────────────── featured products ──────────────────── */}
+        <section className="mx-auto w-full max-w-[1120px] px-5 pb-4 pt-10">
+          <div className="flex items-end justify-between gap-4">
+            <h2 className="text-[20px] font-extrabold tracking-[-0.035em] text-ink">
+              Featured products
+            </h2>
+            <Link
+              href="/search"
+              className="flex shrink-0 items-center gap-1.5 text-[12px] font-semibold text-brand-600 hover:text-brand-700"
+            >
+              View all products
+              <Icon.ArrowRight size={13} />
+            </Link>
+          </div>
+
+          <div className="mt-5">
+            {products === null && !failed ? (
+              <div className="grid grid-cols-2 gap-x-4 gap-y-6 sm:grid-cols-3 lg:grid-cols-6">
+                {Array.from({ length: 6 }).map((_, i) => (
+                  <div key={i} className="flex flex-col gap-2">
+                    <Skeleton className="aspect-[4/3] w-full rounded-[10px]" />
+                    <Skeleton className="h-3 w-4/5" />
+                    <Skeleton className="h-3 w-1/3" />
+                  </div>
+                ))}
+              </div>
+            ) : failed ? (
+              <p className="rounded-xl bg-wash px-4 py-6 text-center text-[13px] text-muted">
+                We couldn&apos;t reach the marketplace API. Check that it&apos;s running, then
+                reload.
+              </p>
+            ) : products && products.length > 0 ? (
+              <div className="grid grid-cols-2 gap-x-4 gap-y-6 sm:grid-cols-3 lg:grid-cols-6">
+                {products.slice(0, 6).map((item) => (
+                  <ProductTile
+                    key={item.product.id}
+                    product={item.product}
+                    shopName={item.shop.name}
+                    href={`/product?id=${item.product.id}&shop=${item.shop.slug}`}
+                  />
+                ))}
+              </div>
+            ) : (
+              <p className="rounded-xl bg-wash px-4 py-10 text-center text-[13px] text-muted">
+                No products listed yet. Sellers add their first items from the dashboard.
+              </p>
+            )}
+          </div>
+        </section>
+
+        {/* Two-up seller band, kept in the reference's colour language. */}
+        <section className="mx-auto w-full max-w-[1120px] px-5 py-10">
+          <div className="grid gap-4 md:grid-cols-[1.2fr_0.8fr]">
+            <div className="flex flex-wrap items-center justify-between gap-4 rounded-xl bg-[#f6f7fa] px-6 py-5">
+              <div>
+                <p className="text-[15px] font-extrabold tracking-[-0.02em] text-ink">
+                  {shops?.length ?? 0} independent shops, one marketplace
+                </p>
+                <p className="mt-1 text-[12px] text-muted">
+                  Every storefront is run by a real seller and has an AI assistant.
+                </p>
+              </div>
+              <Link
+                href="/search"
+                className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-line bg-white px-3.5 text-[12px] font-semibold text-ink transition hover:border-brand-300"
+              >
+                Browse shops
+                <Icon.ArrowRight size={13} />
+              </Link>
+            </div>
+            <div className="flex items-center justify-between gap-3 rounded-xl bg-[#e9f1fd] px-6 py-5">
+              <p className="text-[13px] font-semibold leading-snug text-ink">
+                Not sure what to buy?
+                <span className="mt-0.5 block text-[11.5px] font-normal text-ink/60">
+                  Ask any shop&apos;s AI assistant.
+                </span>
+              </p>
+              <Icon.Spark size={26} className="shrink-0 text-brand-600" />
+            </div>
+          </div>
         </section>
       </main>
 
-      <footer className="border-t border-zinc-200/70 bg-white py-7">
-        <div className="mx-auto flex w-full max-w-6xl flex-col gap-1 px-5 text-[11px] uppercase tracking-[0.14em] text-zinc-400 sm:flex-row sm:items-center sm:justify-between">
-          <span>EasyShopAI · Dhaka</span>
-          <span>Storefronts and cash-on-delivery orders for small sellers</span>
-        </div>
-      </footer>
+      <SiteFooter />
     </div>
   );
 }
 
-function EmptyResult({ title, body }: { title: string; body: string }) {
+function TrustItem({ icon, label }: { icon: React.ReactNode; label: string }) {
   return (
-    <div className="border-t border-zinc-200 py-12">
-      <p className="text-sm font-medium text-zinc-900">{title}</p>
-      <p className="mt-1.5 max-w-sm text-[13px] leading-relaxed text-zinc-600">{body}</p>
-      <Link
-        href="/dashboard"
-        className="mt-4 inline-block border-b border-zinc-900 pb-0.5 text-[13px] font-medium text-zinc-900"
-      >
-        Open a shop
-      </Link>
-    </div>
+    <li className="flex items-center gap-1.5">
+      <span className="text-ink/55">{icon}</span>
+      {label}
+    </li>
   );
 }

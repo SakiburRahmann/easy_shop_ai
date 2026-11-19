@@ -33,7 +33,7 @@ const SUPABASE_URL = (env.SUPABASE_URL ?? '').replace(/\/$/, '');
 const SECRET = env.SUPABASE_SECRET_KEY;
 const DEMO_EMAIL = 'demo@easyshopai.dev';
 const DEMO_PASSWORD = 'easyshop-demo1';
-const SLUG = 'rahman-fashion';
+const SLUG = 'northline-home';
 
 if (!SUPABASE_URL || !SECRET) {
   console.error('Missing SUPABASE_URL or SUPABASE_SECRET_KEY in .env.local');
@@ -107,27 +107,27 @@ async function main() {
 
   const shop = await rest('/rest/v1/shops', 'POST', {
     owner_id: sellerId,
-    name: 'Rahman Fashion',
+    name: 'Northline Home',
     slug: SLUG,
-    description: 'Server-confirmed demo shop seeded by EasyShopAI.',
+    business_type: 'home',
+    description: 'Thoughtful essentials for a more comfortable home.',
     template_id: 'classic',
-    theme: { primaryColor: '#0EA5E9' },
+    theme: { primaryColor: '#2f5bf0' },
     contact: {
-      phone: '+8801700000000',
+      phone: '+1 (415) 555-0134',
       email: DEMO_EMAIL,
-      facebook: 'https://facebook.com/rahmanfashion',
+      facebook: 'https://facebook.com/northlinehome',
     },
     delivery_rules: {
       zones: [
-        { name: 'Dhaka City', charge: 60, etaDays: 1 },
-        { name: 'Chattogram', charge: 120, etaDays: 3 },
-        { name: 'Outside Dhaka', charge: 130, etaDays: 3 },
+        { name: 'Standard delivery', charge: 9, etaDays: 4 },
+        { name: 'Express delivery', charge: 19, etaDays: 2 },
+        { name: 'Remote areas', charge: 29, etaDays: 7 },
       ],
     },
     policies: {
-      returnPolicy:
-        '7 দিনের মধ্যে অব্যবহৃত পণ্য রসিদসহ ফেরত দেওয়া যাবে। (7-day return for unused items with receipt.)',
-      notes: 'We pack with care and ship nationwide.',
+      returnPolicy: '30-day returns on unused items in their original packaging.',
+      notes: 'Packed with care and shipped from our studio.',
     },
   });
   const shopRow = Array.isArray(shop.json) ? shop.json[0] : null;
@@ -141,15 +141,15 @@ async function main() {
   await rest('/rest/v1/ai_settings', 'POST', {
     shop_id: shopRow.id,
     tone: 'friendly',
-    languages: ['bn', 'en'],
+    languages: ['en'],
     max_discount_pct: 15,
     extra_instructions:
-      'আমরা সারা দেশে ডেলিভারি দিই। COD-ই আপাতত একমাত্র পেমেন্ট। বাংলায় আলাপ করলে স্বাভাবিক বাংলায় উত্তর দিই।',
+      'We ship across the country. Cash on delivery is the only payment method. Always answer in English.',
   });
   console.log('✓ ai settings');
 
   // 4. Categories -----------------------------------------------------------
-  const catNames = ['T-Shirts', 'Hoodies', 'Trousers', 'Shoes', 'Outerwear', 'Dresses'];
+  const catNames = ['Home & Living', 'Kitchen', 'Decor', 'Textiles'];
   const cats = await rest(
     '/rest/v1/categories',
     'POST',
@@ -160,98 +160,97 @@ async function main() {
   console.log(`✓ ${catRows.length} categories`);
 
   // Verified Unsplash photography (see apps/web/src/components/storefront/
-  // image-library.ts). Product cards must show the item itself, so each demo
-  // product carries an image of the garment it describes.
-  const img = (id, w = 900, h = 1100) =>
+  // image-library.ts). Product cards show the item itself.
+  const img = (id, w = 1000, h = 800) =>
     `https://images.unsplash.com/photo-${id}?auto=format&fit=crop&w=${w}&h=${h}&q=80`;
 
   // 5. Products + variants --------------------------------------------------
   const products = [
     {
-      name: 'হেভিওয়েট কটন টি-শার্ট (Heavyweight Cotton Tee)',
+      name: 'Linen Throw Blanket',
       description:
-        'মোটা ২২০ জিএসএম কটন, ধোয়ার পরেও রঙ ফেড হয় না। (220 GSM combed cotton, stays true after washing.)',
-      category_id: catId['T-Shirts'],
-      price: 1150,
-      floor_price: 900,
-      images: [img('1521572163474-6864f9cf17ab')],
+        'A soft stonewashed linen throw with a hand-knotted fringe. Light enough for summer evenings, warm enough for winter sofas.',
+      category_id: catId['Textiles'],
+      price: 49,
+      floor_price: 38,
+      images: [img('1600369672770-985fd30004eb')],
       variants: [
-        { size: 'S', color: 'White', stock: 10, price_override: null },
-        { size: 'M', color: 'White', stock: 8, price_override: null },
-        { size: 'L', color: 'White', stock: 12, price_override: 1250 },
+        { color: 'Natural', stock: 18 },
+        { color: 'Charcoal', stock: 9 },
+        { color: 'Sage', stock: 7 },
       ],
     },
     {
-      name: 'ব্রাশড ফ্লিস হুডি (Brushed Fleece Hoodie)',
+      name: 'Ceramic Mug Set',
       description:
-        'ভেতরে ব্রাশড ফ্লিস, ঠান্ডায় আরামদায়ক। (Heavy brushed fleece hoodie, relaxed fit.)',
-      category_id: catId['Hoodies'],
-      price: 2400,
-      floor_price: 1900,
-      images: [img('1517841905240-472988babdf9')],
+        'Four hand-glazed stoneware mugs with a matte finish. Dishwasher safe, made for slow mornings.',
+      category_id: catId['Kitchen'],
+      price: 28,
+      floor_price: 21,
+      images: [img('1616241673111-508b4662c707')],
       variants: [
-        { size: 'M', color: 'Pale Blue', stock: 5, price_override: null },
-        { size: 'XL', color: 'Pale Blue', stock: 3, price_override: 2600 },
+        { color: 'White', stock: 24 },
+        { color: 'Sand', stock: 12 },
       ],
     },
     {
-      name: 'সিল্ক স্লিপ ড্রেস (Silk Slip Dress)',
-      description: 'হালকা সিল্ক, বায়াস কাট। (Bias-cut silk slip dress with adjustable straps.)',
-      category_id: catId['Dresses'],
-      price: 4300,
-      floor_price: 3500,
-      images: [img('1566174053879-31528523f8ae')],
-      variants: [{ size: 'M', color: 'Burgundy', stock: 4, price_override: null }],
-    },
-    {
-      name: 'উল ব্লেন্ড ওভারকোট (Wool Blend Overcoat)',
+      name: 'Wooden Cutting Board',
       description:
-        'দীর্ঘ উল ব্লেন্ড কোট, শীতের শহরের জন্য। (Longline wool blend overcoat, structured shoulder.)',
-      category_id: catId['Outerwear'],
-      price: 6800,
-      floor_price: 5400,
-      images: [img('1485968579580-b6d095142e6e')],
-      variants: [
-        { size: 'S', color: 'Plaid', stock: 6, price_override: null },
-        { size: 'M', color: 'Plaid', stock: 4, price_override: null },
-      ],
+        'Solid oak serving board with a juice groove and a soft oiled finish. Use it to prep, serve and display.',
+      category_id: catId['Kitchen'],
+      price: 36,
+      floor_price: 27,
+      images: [img('1617695615794-a5abcece0f48')],
+      variants: [{ color: 'Natural', stock: 15 }],
     },
     {
-      name: 'সেলভেজ ডেনিম জ্যাকেট (Selvedge Denim Jacket)',
+      name: 'Stone Planter',
       description:
-        'মোটা সেলভেজ ডেনিম, ক্রমশ নিজের মতো ফেড হবে। (Rigid selvedge denim jacket, fades with wear.)',
-      category_id: catId['Outerwear'],
-      price: 5200,
-      floor_price: 4200,
-      images: [img('1611312449408-fcece27cdbb7')],
+        'A weighty, hand-cast planter in a warm stone finish, with a drainage hole and a matching saucer.',
+      category_id: catId['Decor'],
+      price: 32,
+      floor_price: 24,
+      images: [img('1562351757-66f3589f30cf')],
       variants: [
-        { size: 'M', color: 'Indigo', stock: 7, price_override: null },
-        { size: 'L', color: 'Indigo', stock: 7, price_override: null },
+        { color: 'Stone', stock: 11 },
+        { color: 'Charcoal', stock: 6 },
       ],
     },
     {
-      name: 'টেপার্ড কার্গো ট্রাউজার (Tapered Cargo Trouser)',
-      description: 'কটন টুইল কার্গো, ছয়টি পকেট। (Cotton twill cargo with a clean tapered leg.)',
-      category_id: catId['Trousers'],
-      price: 2850,
-      floor_price: 2300,
-      images: [img('1548883354-7622d03aca27')],
+      name: 'Table Lamp',
+      description:
+        'A linen-shade table lamp on a slim wooden base. Warm, diffused light for a bedside or reading corner.',
+      category_id: catId['Home & Living'],
+      price: 89,
+      floor_price: 72,
+      images: [img('1517991104123-1d56a6e81ed9')],
       variants: [
-        { size: '30', color: 'Charcoal', stock: 9, price_override: null },
-        { size: '32', color: 'Charcoal', stock: 9, price_override: null },
+        { color: 'Ivory', stock: 8 },
+        { color: 'Sage', stock: 5 },
       ],
     },
     {
-      name: 'সুয়েড লো-টপ স্নিকার (Suede Low-Top Sneaker)',
-      description: 'সুয়েড আপার, কুশনড ইনসোল। (Suede upper on a cupsole, padded collar.)',
-      category_id: catId['Shoes'],
-      price: 3900,
-      floor_price: 3100,
-      images: [img('1549298916-b41d501d3772')],
+      name: 'Lumbar Cushion',
+      description:
+        'A textured cotton lumbar cushion with a feather-soft insert. Layered neutral tones for the sofa or bed.',
+      category_id: catId['Textiles'],
+      price: 82,
+      floor_price: 64,
+      images: [img('1611489704164-6f73c62bd810')],
       variants: [
-        { size: '41', color: 'Tan', stock: 4, price_override: null },
-        { size: '42', color: 'Tan', stock: 4, price_override: null },
+        { color: 'Sand', stock: 14 },
+        { color: 'Olive', stock: 10 },
       ],
+    },
+    {
+      name: 'Eucalyptus Stem Set',
+      description:
+        'Faux eucalyptus stems with a natural drape, ready for a tall vase. No watering, no fading.',
+      category_id: catId['Decor'],
+      price: 14,
+      floor_price: 9,
+      images: [img('1574441038618-2e3beb562baf')],
+      variants: [{ color: 'Natural', stock: 30 }],
     },
   ];
 
@@ -281,10 +280,10 @@ async function main() {
     for (const v of p.variants) {
       variantRows.push({
         product_id: prodRows[i].id,
-        size: v.size ?? null,
+        size: null,
         color: v.color ?? null,
         stock: v.stock,
-        price_override: v.price_override != null ? v.price_override.toFixed(2) : null,
+        price_override: null,
       });
     }
   });

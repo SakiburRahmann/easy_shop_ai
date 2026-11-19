@@ -395,8 +395,6 @@ function DeliverySettings({
 function AiSettingsCard({ auth, shop }: { auth: Api; shop: Shop }) {
   const [settings, setSettings] = useState<AiSettings | null>(null);
   const [tone, setTone] = useState<'friendly' | 'formal' | 'playful'>('friendly');
-  const [bn, setBn] = useState(true);
-  const [en, setEn] = useState(true);
   const [discount, setDiscount] = useState(10);
   const [extra, setExtra] = useState('');
   const [busy, setBusy] = useState(false);
@@ -411,8 +409,6 @@ function AiSettingsCard({ auth, shop }: { auth: Api; shop: Shop }) {
         if (!parsed.success || cancelled) return;
         setSettings(parsed.data);
         setTone(parsed.data.tone);
-        setBn(parsed.data.languages.includes('bn'));
-        setEn(parsed.data.languages.includes('en'));
         setDiscount(parsed.data.maxDiscountPct);
         setExtra(parsed.data.extraInstructions ?? '');
       })
@@ -423,11 +419,7 @@ function AiSettingsCard({ auth, shop }: { auth: Api; shop: Shop }) {
   }, [auth, shop.id]);
 
   const save = async () => {
-    const languages = [bn ? 'bn' : '', en ? 'en' : ''].filter(Boolean);
-    if (languages.length === 0) {
-      setErr('Pick at least one language');
-      return;
-    }
+    const languages = ['en'];
     const input = aiSettingsUpdateInputSchema.safeParse({
       tone,
       languages,
@@ -494,27 +486,8 @@ function AiSettingsCard({ auth, shop }: { auth: Api; shop: Shop }) {
             <span className="w-12 text-right text-sm font-semibold">{discount}%</span>
           </div>
         </Field>
-        <Field label="Languages" hint="Banglish is auto-detected">
-          <div className="flex gap-3 pt-1 text-sm">
-            <label className="flex items-center gap-1">
-              <input
-                type="checkbox"
-                checked={bn}
-                onChange={(e) => setBn(e.target.checked)}
-                className="accent-emerald-600"
-              />{' '}
-              বাংলা
-            </label>
-            <label className="flex items-center gap-1">
-              <input
-                type="checkbox"
-                checked={en}
-                onChange={(e) => setEn(e.target.checked)}
-                className="accent-emerald-600"
-              />{' '}
-              English
-            </label>
-          </div>
+        <Field label="Language" hint="English only">
+          <p className="pt-2 text-[13px] font-medium text-ink-soft">English</p>
         </Field>
       </div>
       <Field

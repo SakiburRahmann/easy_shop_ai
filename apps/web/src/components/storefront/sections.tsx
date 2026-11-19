@@ -16,7 +16,7 @@
  */
 import type { Category, ProductPublic, Shop } from '@easyshop/shared';
 import { productAvailableStock, productSoldOut } from '@easyshop/shared';
-import { taka } from '@/lib/api';
+import { money } from '@/lib/api';
 import { Icon } from '@/lib/icons';
 import { Reveal } from '@/components/storefront/motion';
 import type { DecorSet } from '@/components/storefront/decor';
@@ -73,7 +73,7 @@ function shopNote(shop: Shop, products: readonly ProductPublic[]): string {
   const zone = shop.deliveryRules.zones[0];
   const count = `${products.length} ${products.length === 1 ? 'item' : 'items'} listed`;
   if (!zone) return `${count}. Cash on delivery across Bangladesh.`;
-  return `${count}. Delivery ৳${zone.charge} in ${zone.name}, about ${zone.etaDays} ${
+  return `${count}. Delivery $${zone.charge} in ${zone.name}, about ${zone.etaDays} ${
     zone.etaDays === 1 ? 'day' : 'days'
   }.`;
 }
@@ -137,7 +137,7 @@ export function ProductCard({
             {product.name}
           </span>
           <span className="shrink-0 text-[12px] tabular-nums" style={{ color: muted }}>
-            {taka(product.price)}
+            {money(product.price)}
           </span>
         </div>
         {lowStock ? (
@@ -159,38 +159,38 @@ export function ProductCard({
         className="group block w-full text-left"
         aria-label={`View ${product.name}`}
       >
-        <div className="relative w-full overflow-hidden rounded-[14px] bg-[#eceae6]">
+        <div className="relative w-full overflow-hidden rounded-2xl bg-[#f2f4f9]">
           {product.images[0] ? (
             <img
               src={product.images[0]}
               alt={product.name}
               loading="lazy"
-              className="aspect-[3/4] h-full w-full object-cover transition-transform duration-[1200ms] ease-[cubic-bezier(.16,1,.3,1)] group-hover:scale-[1.05]"
+              className="aspect-[3/4] h-full w-full object-cover transition-transform duration-[1200ms] ease-[cubic-bezier(.16,1,.3,1)] group-hover:scale-[1.04]"
             />
           ) : (
             <div className="flex aspect-[3/4] items-center justify-center" style={{ color: muted }}>
               <Icon.Package size={24} />
             </div>
           )}
-          <div className="pointer-events-none absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/60 to-transparent px-3.5 pb-3 pt-8">
-            <span className="text-[12px] font-medium tabular-nums text-white">
-              {taka(product.price)}
-            </span>
-          </div>
-          <span className="absolute inset-x-3.5 bottom-3.5 translate-y-2 text-[10px] uppercase tracking-[0.18em] text-white/90 opacity-0 transition duration-500 group-hover:translate-y-0 group-hover:opacity-100">
-            {soldOut ? 'Sold out' : 'Quick view'}
-          </span>
-        </div>
-        <div className="mt-3 flex items-start justify-between gap-2">
-          <span className="text-[13px] leading-snug" style={{ fontFamily: font, color: ink }}>
-            {product.name}
-          </span>
-          {lowStock ? (
-            <span className="shrink-0 text-[10px] tabular-nums" style={{ color: muted }}>
-              {stock} left
+          {soldOut ? (
+            <span className="absolute left-2.5 top-2.5 rounded-full bg-white/95 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide text-[#0e1424]">
+              Sold out
             </span>
           ) : null}
         </div>
+        <div className="mt-3 flex items-start justify-between gap-2">
+          <span className="text-[13px] font-semibold leading-snug" style={{ fontFamily: font, color: ink }}>
+            {product.name}
+          </span>
+          <span className="shrink-0 text-[13px] font-bold tabular-nums" style={{ color: ink }}>
+            {money(product.price)}
+          </span>
+        </div>
+        {lowStock ? (
+          <span className="mt-0.5 block text-[10px]" style={{ color: muted }}>
+            {stock} left
+          </span>
+        ) : null}
       </button>
     );
   }
@@ -201,7 +201,7 @@ export function ProductCard({
       className="group text-left"
       aria-label={`View ${product.name}`}
     >
-      <div className="relative aspect-square w-full overflow-hidden rounded-[3px] bg-[#efefed]">
+      <div className="relative aspect-square w-full overflow-hidden rounded-2xl bg-[#f2f4f9]">
         {product.images[0] ? (
           <img
             src={product.images[0]}
@@ -224,11 +224,11 @@ export function ProductCard({
         ) : null}
       </div>
       <div className="mt-3 flex items-baseline justify-between gap-3">
-        <span className="text-[13px] leading-snug es-link" style={{ color: ink, fontFamily: font }}>
+        <span className="text-[13px] font-semibold leading-snug" style={{ color: ink, fontFamily: font }}>
           {product.name}
         </span>
-        <span className="shrink-0 text-[13px] font-medium tabular-nums" style={{ color: ink }}>
-          {taka(product.price)}
+        <span className="shrink-0 text-[13px] font-bold tabular-nums" style={{ color: ink }}>
+          {money(product.price)}
         </span>
       </div>
       {lowStock ? (
@@ -258,7 +258,7 @@ export function AnnouncementBar({
   const zones = shop.deliveryRules.zones;
   const facts = [
     ...(announcement ? [announcement] : []),
-    ...zones.slice(0, 3).map((zone) => `${zone.name} · ৳${zone.charge} · ${zone.etaDays}d`),
+    ...zones.slice(0, 3).map((zone) => `${zone.name} · $${zone.charge} · ${zone.etaDays}d`),
     'Cash on delivery',
     shop.contact.phone ? `Call ${shop.contact.phone}` : 'Order by chat',
   ];
@@ -766,7 +766,7 @@ export function StoryBand({
                 >
                   <dt className="text-white/80">{zone.name}</dt>
                   <dd className="tabular-nums text-white/45">
-                    ৳{zone.charge} · {zone.etaDays}d
+                    ${zone.charge} · {zone.etaDays}d
                   </dd>
                 </div>
               ))
@@ -798,7 +798,7 @@ export function TrustRow({
     {
       label: 'Delivery',
       value: zones.length
-        ? zones.map((zone) => `${zone.name} ৳${zone.charge}`).join('  ·  ')
+        ? zones.map((zone) => `${zone.name} $${zone.charge}`).join('  ·  ')
         : 'Confirmed on the phone',
     },
     { label: 'Payment', value: 'Cash on delivery, nationwide' },
@@ -871,7 +871,7 @@ export function PoliciesSection({
                 >
                   <span>{zone.name}</span>
                   <span className="tabular-nums" style={{ color: muted }}>
-                    ৳{zone.charge} · {zone.etaDays}d
+                    ${zone.charge} · {zone.etaDays}d
                   </span>
                 </li>
               ))}

@@ -1,36 +1,51 @@
 @import 'tailwindcss';
 
 @theme {
-  --font-sans: var(--font-inter), var(--font-bangla), ui-sans-serif, system-ui, sans-serif;
-  --color-brand-50: #ecfdf5;
-  --color-brand-100: #d1fae5;
-  --color-brand-200: #a7f3d0;
-  --color-brand-300: #6ee7b7;
-  --color-brand-400: #34d399;
-  --color-brand-500: #10b981;
-  --color-brand-600: #059669;
-  --color-brand-700: #047857;
-  --color-brand-800: #065f46;
-  --color-brand-900: #064e3b;
-  --radius-card: 1rem;
-  --radius-xl2: 1.25rem;
+  --font-sans: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
+
+  /* Brand: the exact blue of the reference marketplace (#2f5bf0). */
+  --color-brand-50: #eef3ff;
+  --color-brand-100: #dce6ff;
+  --color-brand-200: #bdd0ff;
+  --color-brand-300: #92b0ff;
+  --color-brand-400: #6088fa;
+  --color-brand-500: #3f6cf5;
+  --color-brand-600: #2f5bf0;
+  --color-brand-700: #2549d6;
+  --color-brand-800: #223fb2;
+  --color-brand-900: #22398c;
+
+  /* Neutral ink used across the shell. */
+  --color-ink: #10131c;
+  --color-ink-soft: #3f4552;
+  --color-muted: #8b90a0;
+  --color-line: #e9ebf1;
+  --color-page: #ffffff;
+  --color-wash: #f6f7fa;
+  --color-wash-blue: #e9f1fd;
+  --color-mint: #ddefe6;
+  --color-mint-ink: #0f3e33;
+
+  --radius-card: 0.75rem;
+  --radius-xl2: 1rem;
+  --shadow-soft: 0 1px 2px rgb(13 20 36 / 0.04), 0 8px 24px -12px rgb(13 20 36 / 0.12);
 }
 
 :root {
-  --background: #f7f7f6;
-  --foreground: #17181a;
+  --background: #ffffff;
+  --foreground: #0e1424;
 }
 
 body {
   background: var(--background);
   color: var(--foreground);
-  letter-spacing: -0.006em;
-  line-height: 1.55;
+  letter-spacing: -0.008em;
+  line-height: 1.5;
 }
 
 /* Selected text in brand tone */
 ::selection {
-  background: #17181a;
+  background: #2f5bf0;
   color: #fff;
 }
 
@@ -53,9 +68,9 @@ body {
 
 /* Consistent focus affordance for keyboard users */
 :focus-visible {
-  outline: 2px solid var(--color-brand-500);
+  outline: 2px solid #2f5bf0;
   outline-offset: 2px;
-  border-radius: 6px;
+  border-radius: 8px;
 }
 
 /* Number inputs: hide spinners for cleaner steppers */
@@ -79,10 +94,10 @@ input[type='number'] {
   }
 }
 .skeleton {
-  background: linear-gradient(90deg, #eceff1 25%, #f5f7f8 45%, #eceff1 65%);
+  background: linear-gradient(90deg, #eef1f7 25%, #f7f9fd 45%, #eef1f7 65%);
   background-size: 200% 100%;
   animation: es-shimmer 1.4s linear infinite;
-  border-radius: 0.5rem;
+  border-radius: 0.75rem;
 }
 
 @keyframes es-pop {

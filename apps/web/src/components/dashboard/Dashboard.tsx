@@ -5,7 +5,7 @@
  * chats and settings. Speaks exclusively to easyshop-api with the seller's
  * access token.
  */
-import { useCallback, useEffect, useState, type FormEvent } from 'react';
+import { useCallback, useEffect, useState, type FormEvent, type ReactNode } from 'react';
 import Link from 'next/link';
 import {
   BUSINESS_TYPE_PRESETS,
@@ -22,6 +22,8 @@ import {
 } from '@easyshop/shared';
 import { api, ApiError, signIn } from '@/lib/api';
 import { Button, ErrorNote, Field, Spinner, inputClass } from '@/components/ui';
+import { SiteHeader } from '@/components/site/header';
+import OverviewTab, { type DashboardTab } from './OverviewTab';
 import { Icon } from '@/lib/icons';
 import { TEMPLATE_VISUALS } from '@/components/storefront/templates';
 import {
@@ -42,14 +44,14 @@ const TOKEN_KEY = 'easyshopai.token';
 const USER_KEY = 'easyshopai.user';
 
 const DEFAULT_THEME: ThemeValue = {
-  primaryColor: '#059669',
+  primaryColor: '#2f52e8',
   accentColor: '#F59E0B',
   font: 'sans',
 };
 
 const DEFAULT_ZONES: DeliveryZone[] = [
-  { name: 'Inside Dhaka', charge: 60, etaDays: 1 },
-  { name: 'Outside Dhaka', charge: 120, etaDays: 3 },
+  { name: 'Standard delivery', charge: 9, etaDays: 4 },
+  { name: 'Express delivery', charge: 19, etaDays: 2 },
 ];
 
 export type Api = <T>(path: string, options?: { method?: string; body?: unknown }) => Promise<T>;
@@ -61,9 +63,7 @@ export default function Dashboard() {
   const [ready, setReady] = useState(false);
   const [session, setSession] = useState<Session | null>(null);
   const [shop, setShop] = useState<Shop | null>(null);
-  const [tab, setTab] = useState<'products' | 'orders' | 'chats' | 'theme' | 'settings'>(
-    'products',
-  );
+  const [tab, setTab] = useState<DashboardTab>('overview');
 
   /** Authenticated API helper; logs out on expired tokens. */
   const auth = useCallback(
@@ -149,83 +149,149 @@ export default function Dashboard() {
 
   if (!session) return <LoginPanel onLogin={afterLogin} />;
 
+  const TABS: Array<[DashboardTab, string, ReactNode]> = [
+    ['overview', 'Store overview', <Icon.Home key="o" size={16} />],
+    ['products', 'Products', <Icon.Package key="p" size={16} />],
+    ['orders', 'Orders', <Icon.Bag key="b" size={16} />],
+    ['chats', 'Chats', <Icon.Message key="c" size={16} />],
+    ['theme', 'Theme', <Icon.Palette key="t" size={16} />],
+    ['settings', 'Store settings', <Icon.Store key="s" size={16} />],
+  ];
+  const heading: Record<DashboardTab, { title: string; body: string }> = {
+    overview: {
+      title: 'Store overview',
+      body: 'Manage your store, track performance and grow your business.',
+    },
+    products: { title: 'Products', body: 'Your catalog, variants, stock and categories.' },
+    orders: { title: 'Orders', body: 'Cash-on-delivery orders from the storefront and AI.' },
+    chats: { title: 'Customer chats', body: 'Every AI conversation, with handoffs flagged.' },
+    theme: { title: 'Theme', body: 'Pick a storefront preset and set your shop copy.' },
+    settings: { title: 'Store settings', body: 'Profile, delivery zones and AI rules.' },
+  };
+
   return (
-    <div className="flex min-h-full flex-1 flex-col">
-      <header className="sticky top-0 z-30 border-b border-zinc-200/80 bg-white/90 backdrop-blur">
-        <div className="mx-auto flex w-full max-w-5xl flex-wrap items-center gap-3 px-5 py-3">
-          <Link href="/" className="flex items-center gap-2">
-            <span className="flex h-8 w-8 items-center justify-center rounded-xl bg-brand-600 text-white shadow-sm shadow-brand-600/30">
-              <Icon.Store size={16} />
-            </span>
-            <span className="text-[17px] font-bold tracking-tight">
-              Easy<span className="text-brand-600">Shop</span>AI
-            </span>
-          </Link>
-          {shop ? (
-            <span className="flex max-w-[46vw] items-center gap-1.5 rounded-full bg-brand-50 px-2.5 py-1 text-xs font-medium text-brand-700">
-              <Icon.Store size={12} className="shrink-0" />
-              <span className="truncate">{shop.name}</span>
-            </span>
-          ) : null}
-          <div className="ml-auto flex items-center gap-2 text-sm">
+    <div className="flex min-h-[100dvh] flex-1 flex-col bg-white">
+      <SiteHeader />
+
+      <div className="flex flex-1">
+        <aside className="sticky top-16 hidden h-[calc(100dvh-4rem)] w-[204px] shrink-0 flex-col border-r border-line bg-[#f7f8fa] lg:flex">
+          <div className="px-3 pt-5">
+            <p className="px-2 text-[10.5px] font-bold tracking-[0.02em] text-ink">Seller area</p>
+            <nav className="mt-3 flex flex-col gap-0.5">
+              {TABS.map(([key, label, icon]) => (
+                <button
+                  key={key}
+                  onClick={() => setTab(key)}
+                  className={`flex items-center gap-2.5 rounded-lg px-2.5 py-2 text-left text-[12.5px] font-medium transition ${
+                    tab === key
+                      ? 'bg-[#e9edfb] font-semibold text-brand-700'
+                      : 'text-ink-soft hover:bg-white hover:text-ink'
+                  }`}
+                >
+                  <span className={tab === key ? 'text-brand-600' : 'text-muted'}>{icon}</span>
+                  {label}
+                </button>
+              ))}
+            </nav>
+          </div>
+
+          <div className="mt-auto p-3">
             {shop ? (
               <a
                 href={`/s?shop=${shop.slug}`}
                 target="_blank"
                 rel="noopener"
-                className="flex items-center gap-1.5 rounded-xl border border-zinc-200 bg-white px-3 py-1.5 text-[13px] font-medium text-zinc-700 shadow-sm transition hover:border-zinc-300 hover:text-brand-700"
+                className="flex h-9 items-center justify-center gap-1.5 rounded-lg border border-line bg-white text-[11.5px] font-semibold text-ink transition hover:text-brand-700"
               >
-                <Icon.Eye size={14} />
-                View store
+                <Icon.Eye size={12} /> Visit storefront
               </a>
             ) : null}
-            <Button variant="ghost" onClick={logout} icon={<Icon.Logout size={14} />}>
-              Log out
-            </Button>
+            <button
+              type="button"
+              onClick={logout}
+              className="mt-2 flex h-9 w-full items-center justify-center gap-1.5 rounded-lg text-[11.5px] font-semibold text-muted transition hover:text-ink"
+            >
+              <Icon.Logout size={12} /> Log out
+            </button>
           </div>
-        </div>
-      </header>
+        </aside>
 
-      <div className="mx-auto w-full max-w-5xl flex-1 px-4 py-6">
-        {shop ? (
-          <>
-            <nav className="mb-6 flex gap-1 overflow-x-auto rounded-2xl bg-zinc-100 p-1 text-sm font-medium [scrollbar-width:none] [&>button]:shrink-0">
-              {(
-                [
-                  ['products', 'Products', <Icon.Package key="p" size={15} />],
-                  ['orders', 'Orders', <Icon.Bag key="o" size={15} />],
-                  ['chats', 'Chats', <Icon.Message key="c" size={15} />],
-                  ['theme', 'Theme', <Icon.Palette key="d" size={15} />],
-                  ['settings', 'Store & AI', <Icon.Palette key="s" size={15} />],
-                ] as const
-              ).map(([key, label, icon]) => (
+        <div className="flex min-w-0 flex-1 flex-col">
+          <nav className="flex w-full min-w-0 gap-1 overflow-x-auto border-b border-line px-4 py-2 lg:hidden [scrollbar-width:none]">
+            {TABS.map(([key, label]) => (
+              <button
+                key={key}
+                onClick={() => setTab(key)}
+                className={`shrink-0 rounded-full px-3 py-1.5 text-[12px] font-semibold transition ${
+                  tab === key
+                    ? 'bg-brand-50 text-brand-700'
+                    : 'text-muted hover:bg-wash hover:text-ink'
+                }`}
+              >
+                {label}
+              </button>
+            ))}
+          </nav>
+
+          <main className="mx-auto w-full max-w-[1000px] flex-1 px-4 py-6 sm:px-8">
+            <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <h1 className="text-[30px] font-extrabold leading-tight tracking-[-0.045em] text-ink">
+                  {heading[tab].title}
+                </h1>
+                <p className="mt-0.5 text-[12px] text-muted">{heading[tab].body}</p>
+              </div>
+
+              <div className="flex items-center gap-2">
+                {shop ? (
+                  <button
+                    type="button"
+                    onClick={() => setTab('settings')}
+                    className="flex h-10 items-center gap-2 rounded-lg border border-line bg-white px-3 text-left"
+                  >
+                    <span className="flex h-7 w-7 items-center justify-center overflow-hidden rounded bg-[#eef1f7] text-[10.5px] font-bold text-brand-700">
+                      {shop.name.slice(0, 1).toUpperCase()}
+                    </span>
+                    <span className="flex min-w-0 flex-col leading-tight">
+                      <span className="max-w-[110px] truncate text-[11.5px] font-semibold text-ink">
+                        {shop.name}
+                      </span>
+                      <span className="text-[10px] text-muted">Switch store</span>
+                    </span>
+                    <Icon.Chevron size={13} className="text-muted" />
+                  </button>
+                ) : null}
                 <button
-                  key={key}
-                  onClick={() => setTab(key)}
-                  className={`flex flex-1 items-center justify-center gap-1.5 rounded-xl px-3 py-2 transition ${
-                    tab === key
-                      ? 'bg-white shadow-sm text-zinc-900'
-                      : 'text-zinc-500 hover:text-zinc-800'
-                  }`}
+                  type="button"
+                  onClick={() => setTab('orders')}
+                  className="flex h-10 items-center gap-1.5 rounded-lg border border-brand-300 bg-white px-3.5 text-[12px] font-semibold text-brand-700 transition hover:bg-brand-50"
                 >
-                  {icon}
-                  {label}
+                  <Icon.Package size={14} />
+                  Manage orders
                 </button>
-              ))}
-            </nav>
-            {tab === 'products' ? <ProductsTab auth={auth} shop={shop} /> : null}
-            {tab === 'orders' ? <OrdersTab auth={auth} shop={shop} /> : null}
-            {tab === 'chats' ? <ChatsTab auth={auth} shop={shop} /> : null}
-            {tab === 'theme' ? (
-              <ThemeGallery auth={auth} shop={shop} onShopChange={setShop} />
-            ) : null}
-            {tab === 'settings' ? (
-              <SettingsTab auth={auth} shop={shop} onShopChange={setShop} />
-            ) : null}
-          </>
-        ) : (
-          <Onboarding onCreated={setShop} auth={auth} email={session.user.email} />
-        )}
+              </div>
+            </div>
+
+            {shop ? (
+              <>
+                {tab === 'overview' ? (
+                  <OverviewTab auth={auth} shop={shop} onTab={setTab} />
+                ) : null}
+                {tab === 'products' ? <ProductsTab auth={auth} shop={shop} /> : null}
+                {tab === 'orders' ? <OrdersTab auth={auth} shop={shop} /> : null}
+                {tab === 'chats' ? <ChatsTab auth={auth} shop={shop} /> : null}
+                {tab === 'theme' ? (
+                  <ThemeGallery auth={auth} shop={shop} onShopChange={setShop} />
+                ) : null}
+                {tab === 'settings' ? (
+                  <SettingsTab auth={auth} shop={shop} onShopChange={setShop} />
+                ) : null}
+              </>
+            ) : (
+              <Onboarding onCreated={setShop} auth={auth} email={session.user.email} />
+            )}
+          </main>
+        </div>
       </div>
     </div>
   );
@@ -397,8 +463,6 @@ function Onboarding({
   });
   const [zones, setZones] = useState<DeliveryZone[]>(DEFAULT_ZONES);
   const [tone, setTone] = useState<'friendly' | 'formal' | 'playful'>('friendly');
-  const [bn, setBn] = useState(true);
-  const [en, setEn] = useState(true);
   const [discount, setDiscount] = useState(10);
   const [extra, setExtra] = useState('');
   const [busy, setBusy] = useState(false);
@@ -426,10 +490,6 @@ function Onboarding({
   };
 
   const create = async () => {
-    if (!bn && !en) {
-      setError('Choose at least one language for the AI agent');
-      return;
-    }
     const cleanedZones = zones
       .filter((zone) => zone.name.trim())
       .map((zone) => ({ ...zone, name: zone.name.trim() }));
@@ -468,7 +528,7 @@ function Onboarding({
           method: 'PATCH',
           body: {
             tone,
-            languages: [bn ? 'bn' : '', en ? 'en' : ''].filter(Boolean),
+            languages: ['en'],
             maxDiscountPct: discount,
             ...(extra.trim() ? { extraInstructions: extra.trim() } : {}),
           },
@@ -680,8 +740,8 @@ function Onboarding({
           </div>
           <div className="rounded-xl border border-zinc-200 bg-zinc-50 px-3 py-2.5 text-xs text-zinc-500">
             <Icon.Truck size={13} className="mr-1 inline" />
-            Tip: most Bangladeshi shops start with Inside Dhaka (৳60, 1 day) and Outside Dhaka
-            (৳120, 3 days). You can edit these any time.
+            Tip: most shops start with Standard delivery ($9, 4 days) and Express delivery
+            ($19, 2 days). You can edit these any time.
           </div>
           <div className="flex justify-between">
             <Button variant="ghost" onClick={() => setStep(2)} icon={<Icon.ArrowLeft size={15} />}>
@@ -723,32 +783,13 @@ function Onboarding({
                   max={90}
                   value={discount}
                   onChange={(e) => setDiscount(Number(e.target.value))}
-                  className="flex-1 accent-emerald-600"
+                  className="flex-1 accent-brand-600"
                 />
                 <span className="w-10 text-right text-sm font-semibold">{discount}%</span>
               </div>
             </Field>
-            <Field label="Languages" hint="Banglish is auto-detected">
-              <div className="flex gap-3 pt-1 text-sm">
-                <label className="flex items-center gap-1">
-                  <input
-                    type="checkbox"
-                    checked={bn}
-                    onChange={(e) => setBn(e.target.checked)}
-                    className="accent-emerald-600"
-                  />{' '}
-                  বাংলা
-                </label>
-                <label className="flex items-center gap-1">
-                  <input
-                    type="checkbox"
-                    checked={en}
-                    onChange={(e) => setEn(e.target.checked)}
-                    className="accent-emerald-600"
-                  />{' '}
-                  English
-                </label>
-              </div>
+            <Field label="Languages" hint="The assistant answers in English">
+              <p className="pt-2 text-[13px] font-medium text-ink-soft">English</p>
             </Field>
           </div>
           <Field
@@ -761,7 +802,7 @@ function Onboarding({
               rows={3}
               maxLength={2000}
               className={inputClass}
-              placeholder="e.g. Always mention that delivery inside Dhaka takes one day. Never offer free delivery."
+              placeholder="e.g. Always mention that standard delivery takes four days. Never offer free delivery."
             />
           </Field>
 

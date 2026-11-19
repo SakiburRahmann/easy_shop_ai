@@ -293,7 +293,7 @@ export function DeliveryZoneEditor({
         <div className="flex flex-col gap-2">
           <div className="hidden gap-2 px-1 text-[10px] font-semibold uppercase tracking-wide text-zinc-400 sm:grid sm:grid-cols-[1fr_100px_86px_32px]">
             <span>Zone</span>
-            <span>Charge (৳)</span>
+            <span>Charge ($)</span>
             <span>ETA (days)</span>
             <span />
           </div>
@@ -450,7 +450,7 @@ export function MiniStorePreview({
             </div>
             <span className="line-clamp-1 text-[10px] font-medium text-zinc-700">{label}</span>
             <span className="text-[10px] font-bold" style={{ color: theme.primaryColor }}>
-              ৳{(index + 2) * 450}
+              ${(index + 2) * 450}
             </span>
           </div>
         ))}

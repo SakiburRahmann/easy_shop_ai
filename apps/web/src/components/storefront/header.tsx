@@ -155,35 +155,33 @@ export function StorefrontHeader({
 
   return (
     <header
-      className="sticky top-0 z-30 border-b bg-white/88 backdrop-blur"
-      style={{ borderColor: `${ink}10` }}
+      className="sticky top-0 z-30 border-b bg-white/95 backdrop-blur"
+      style={{ borderColor: `${ink}12` }}
     >
-      <div className="mx-auto flex w-full max-w-7xl items-center gap-4 px-5 py-4 sm:gap-8 sm:px-8">
-        <Link
-          href="/"
-          className="flex min-w-0 flex-col leading-none"
-          aria-label="EasyShopAI marketplace"
-        >
+      <div className="mx-auto flex w-full max-w-7xl items-center gap-3 px-5 py-3 sm:gap-5 sm:px-8">
+        <Link href="/" className="flex shrink-0 items-center gap-2" aria-label="EasyShopAI marketplace">
           <span
-            className="truncate text-[17px] font-medium tracking-[-0.02em]"
-            style={{ color: ink }}
+            className="flex h-9 w-9 items-center justify-center rounded-[11px] text-white"
+            style={{ backgroundColor: primary }}
           >
-            {shop.name}
+            <Icon.Bag size={17} />
           </span>
-          <span className="mt-1 text-[9px] uppercase tracking-[0.24em]" style={{ color: muted }}>
-            {shop.businessType}
+          <span className="hidden text-[17px] font-extrabold tracking-[-0.03em] sm:block" style={{ color: ink }}>
+            EasyShop<span style={{ color: primary }}>AI</span>
           </span>
         </Link>
 
+        <span className="hidden h-5 w-px bg-black/10 sm:block" aria-hidden="true" />
+
         {nav.length ? (
-          <nav className="hidden items-center gap-6 md:flex" style={{ color: muted }}>
+          <nav className="hidden items-center gap-5 md:flex">
             {nav.map((category) => (
               <button
                 key={category.id}
                 type="button"
                 onClick={() => onPick(category.id)}
-                className="es-link text-[11px] uppercase tracking-[0.14em] transition-colors hover:text-[color:var(--ink)]"
-                style={{ ['--ink' as string]: ink }}
+                className="text-[12.5px] font-semibold transition hover:opacity-70"
+                style={{ color: muted }}
               >
                 {category.name}
               </button>
@@ -191,24 +189,36 @@ export function StorefrontHeader({
           </nav>
         ) : null}
 
-        <div className="ml-auto flex shrink-0 items-center gap-4 sm:gap-6">
+        <div className="ml-auto flex shrink-0 items-center gap-1.5 sm:gap-3">
           {shop.contact.phone ? (
-            <span
-              className="hidden text-[10px] uppercase tracking-[0.16em] lg:block"
-              style={{ color: muted }}
-            >
+            <span className="hidden text-[11px] lg:block" style={{ color: muted }}>
               {shop.contact.phone}
             </span>
           ) : null}
+          <a
+            href={`/s?shop=${shop.slug}&chat=1`}
+            className="hidden items-center gap-1.5 rounded-full px-3 py-2 text-[12px] font-semibold text-white sm:flex"
+            style={{ backgroundColor: '#101828' }}
+          >
+            <Icon.Spark size={13} />
+            Ask AI
+          </a>
           <button
             type="button"
             onClick={onCart}
             aria-label={cartLabel}
-            className="flex items-center gap-2 border-b pb-1 text-[10px] uppercase tracking-[0.2em]"
-            style={{ borderColor: `${ink}26`, color: ink }}
+            className="relative flex h-9 w-9 items-center justify-center rounded-full transition hover:bg-black/5"
+            style={{ color: ink }}
           >
-            <Icon.Bag size={12} />
-            Bag{cartUnits ? ` (${cartUnits})` : ''}
+            <Icon.Bag size={18} />
+            {cartUnits > 0 ? (
+              <span
+                className="absolute right-0.5 top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full px-1 text-[10px] font-bold text-white"
+                style={{ backgroundColor: primary }}
+              >
+                {cartUnits}
+              </span>
+            ) : null}
           </button>
         </div>
       </div>

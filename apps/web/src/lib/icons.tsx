@@ -263,6 +263,13 @@ export const Icon = {
       <circle cx="12" cy="10" r="3" />
     </Base>
   ),
+  Menu: (p: P) => (
+    <Base {...p}>
+      <path d="M4 6h16" />
+      <path d="M4 12h16" />
+      <path d="M4 18h16" />
+    </Base>
+  ),
   Star: (p: P) => (
     <Base {...p}>
       <path d="m12 2 3.1 6.3 6.9 1-5 4.9 1.2 6.8-6.2-3.3L5.8 21 7 14.2 2 9.3l6.9-1z" />

@@ -140,6 +140,6 @@ export function visitorId(): string {
   return id;
 }
 
-export function taka(amount: number): string {
-  return `৳${Number.isInteger(amount) ? amount : amount.toFixed(2)}`;
+export function money(amount: number): string {
+  return `$${Number.isInteger(amount) ? amount : amount.toFixed(2)}`;
 }
