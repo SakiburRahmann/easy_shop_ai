@@ -11,6 +11,9 @@ const nextConfig: NextConfig = {
   // Local previews are served from 127.0.0.1 while Next binds localhost.
   // This only affects `next dev`; the static export is unchanged.
   allowedDevOrigins: ['127.0.0.1'],
+  // Set by the security upgrade flow (`next upgrade --agent=security`) so future
+  // advisories are surfaced by the tooling instead of going unnoticed.
+  experimental: { agentUpgrade: 'security' },
   turbopack: {
     rules: {
       '*.css': {
