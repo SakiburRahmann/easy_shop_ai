@@ -159,14 +159,21 @@ export function StorefrontHeader({
       style={{ borderColor: `${ink}12` }}
     >
       <div className="mx-auto flex w-full max-w-7xl items-center gap-3 px-5 py-3 sm:gap-5 sm:px-8">
-        <Link href="/" className="flex shrink-0 items-center gap-2" aria-label="EasyShopAI marketplace">
+        <Link
+          href="/"
+          className="flex shrink-0 items-center gap-2"
+          aria-label="EasyShopAI marketplace"
+        >
           <span
             className="flex h-9 w-9 items-center justify-center rounded-[11px] text-white"
             style={{ backgroundColor: primary }}
           >
             <Icon.Bag size={17} />
           </span>
-          <span className="hidden text-[17px] font-extrabold tracking-[-0.03em] sm:block" style={{ color: ink }}>
+          <span
+            className="hidden text-[17px] font-extrabold tracking-[-0.03em] sm:block"
+            style={{ color: ink }}
+          >
             EasyShop<span style={{ color: primary }}>AI</span>
           </span>
         </Link>

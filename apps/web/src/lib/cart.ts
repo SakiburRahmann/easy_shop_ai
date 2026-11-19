@@ -90,10 +90,7 @@ export function addCartLine(
     ? current.map((line) =>
         line.key === key ? { ...line, qty: Math.min(max, line.qty + qty) } : line,
       )
-    : [
-        ...current,
-        { key, product, ...(variantId ? { variantId } : {}), qty: Math.min(max, qty) },
-      ];
+    : [...current, { key, product, ...(variantId ? { variantId } : {}), qty: Math.min(max, qty) }];
   writeCart(slug, next);
   return true;
 }
@@ -116,7 +113,10 @@ export function removeCartLine(slug: string, key: string): void {
 }
 
 export function cartSubtotal(lines: readonly CartLine[]): number {
-  return lines.reduce((sum, line) => sum + lineUnitPrice(line.product, line.variantId) * line.qty, 0);
+  return lines.reduce(
+    (sum, line) => sum + lineUnitPrice(line.product, line.variantId) * line.qty,
+    0,
+  );
 }
 
 export function cartUnits(lines: readonly CartLine[]): number {
@@ -161,7 +161,8 @@ export function useShopCartUnits(slug: string): number {
 export function useCartCount(): number {
   const [count, setCount] = useState(0);
   useEffect(() => {
-    const refresh = () => setCount(shopsWithCarts().reduce((sum, slug) => sum + cartUnits(readCart(slug)), 0));
+    const refresh = () =>
+      setCount(shopsWithCarts().reduce((sum, slug) => sum + cartUnits(readCart(slug)), 0));
     refresh();
     window.addEventListener(CART_EVENT, refresh);
     window.addEventListener('storage', refresh);

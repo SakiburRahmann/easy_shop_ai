@@ -122,7 +122,10 @@ export function SiteHeader({ query = '', onSearch }: { query?: string; onSearch?
 
         {menu ? (
           <div className="border-t border-line bg-white px-5 py-4 lg:hidden">
-            <form onSubmit={submit} className="mb-3 flex h-10 items-center gap-2 rounded-full bg-[#f4f5f9] pl-4 pr-1">
+            <form
+              onSubmit={submit}
+              className="mb-3 flex h-10 items-center gap-2 rounded-full bg-[#f4f5f9] pl-4 pr-1"
+            >
               <Icon.Search size={14} className="text-muted" />
               <input
                 value={draft}
@@ -177,12 +180,7 @@ function QuintBag() {
         d="M6.2 7.5h11.6a1.4 1.4 0 0 1 1.4 1.3l.7 10a2.2 2.2 0 0 1-2.2 2.3H6.3a2.2 2.2 0 0 1-2.2-2.3l.7-10a1.4 1.4 0 0 1 1.4-1.3Z"
         fill="#2f5bf0"
       />
-      <path
-        d="M9 8V6.6a3 3 0 0 1 6 0V8"
-        stroke="#2f5bf0"
-        strokeWidth="1.9"
-        strokeLinecap="round"
-      />
+      <path d="M9 8V6.6a3 3 0 0 1 6 0V8" stroke="#2f5bf0" strokeWidth="1.9" strokeLinecap="round" />
       <path
         d="M8.6 11.2v1.2M15.4 11.2v1.2"
         stroke="white"
@@ -200,7 +198,9 @@ export function SiteFooter() {
         <div className="flex flex-col gap-3">
           <Link href="/" className="flex items-center gap-2">
             <QuintBag />
-            <span className="text-[19px] font-extrabold tracking-[-0.04em] text-ink">EasyShopAI</span>
+            <span className="text-[19px] font-extrabold tracking-[-0.04em] text-ink">
+              EasyShopAI
+            </span>
           </Link>
           <p className="max-w-[34ch] text-[12.5px] leading-relaxed text-muted">
             Great products. Brighter businesses. Every shop on EasyShopAI has an AI assistant that

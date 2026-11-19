@@ -83,7 +83,8 @@ export function Button({
     primary:
       'bg-brand-600 text-white shadow-[0_8px_18px_-10px_rgba(47,82,232,.85)] hover:bg-brand-700 active:bg-brand-800',
     soft: 'bg-brand-50 text-brand-700 hover:bg-brand-100',
-    outline: 'border border-brand-200 bg-white text-brand-700 hover:border-brand-400 hover:bg-brand-50',
+    outline:
+      'border border-brand-200 bg-white text-brand-700 hover:border-brand-400 hover:bg-brand-50',
     ghost: 'border border-line bg-white text-ink-soft hover:bg-wash',
     danger: 'border border-red-200 bg-white text-red-600 hover:bg-red-50',
   } as const;

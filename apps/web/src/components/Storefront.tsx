@@ -84,8 +84,7 @@ export default function Storefront() {
     }
   }, [router, slug]);
 
-  const openProduct = (productId: string) =>
-    router.push(`/product?id=${productId}&shop=${slug}`);
+  const openProduct = (productId: string) => router.push(`/product?id=${productId}&shop=${slug}`);
 
   const visibleProducts = useMemo(() => {
     const list = [...(data?.products ?? [])];
@@ -137,16 +136,22 @@ export default function Storefront() {
 
   const primary = data.shop.theme.primaryColor ?? '#2f5bf0';
   const accent = data.shop.theme.accentColor ?? '#f59e0b';
-  const tagline =
-    {
-      fashion: ['Style that feels like you.', 'Everyday', 'Style', 'Simple.', 'Comfort.', 'You.'],
-      electronics: ['Sound that moves with you.', 'Everyday', 'Sound', 'Clear.', 'Crisp.', 'Sound.'],
-      home: ['Home feels better here.', 'Everyday', 'Comforts', 'Simple.', 'Natural.', 'Home.'],
-      beauty: ['Care for your everyday glow.', 'Everyday', 'Care', 'Glow.', 'Soft.', 'Daily.'],
-      groceries: ['Fresh picks, delivered.', 'Everyday', 'Fresh', 'Fresh.', 'Local.', 'Daily.'],
-      kids: ['Made for little adventures.', 'Everyday', 'Play', 'Play.', 'Learn.', 'Grow.'],
-      other: ['Thoughtful things, chosen well.', 'Everyday', 'Finds', 'Made.', 'With.', 'Care.'],
-    }[data.shop.businessType] ?? ['Home feels better here.', 'Everyday', 'Comforts', 'Simple.', 'Natural.', 'Home.'];
+  const tagline = {
+    fashion: ['Style that feels like you.', 'Everyday', 'Style', 'Simple.', 'Comfort.', 'You.'],
+    electronics: ['Sound that moves with you.', 'Everyday', 'Sound', 'Clear.', 'Crisp.', 'Sound.'],
+    home: ['Home feels better here.', 'Everyday', 'Comforts', 'Simple.', 'Natural.', 'Home.'],
+    beauty: ['Care for your everyday glow.', 'Everyday', 'Care', 'Glow.', 'Soft.', 'Daily.'],
+    groceries: ['Fresh picks, delivered.', 'Everyday', 'Fresh', 'Fresh.', 'Local.', 'Daily.'],
+    kids: ['Made for little adventures.', 'Everyday', 'Play', 'Play.', 'Learn.', 'Grow.'],
+    other: ['Thoughtful things, chosen well.', 'Everyday', 'Finds', 'Made.', 'With.', 'Care.'],
+  }[data.shop.businessType] ?? [
+    'Home feels better here.',
+    'Everyday',
+    'Comforts',
+    'Simple.',
+    'Natural.',
+    'Home.',
+  ];
   const pool = poolFor(data.shop.businessType);
   const heroPhoto = photo(rotate(pool.hero, seedHash(slug))[0] ?? pool.hero[0], 1600, 520);
   const lookA = photo(pool.looks[0] ?? pool.hero[0], 900, 620);

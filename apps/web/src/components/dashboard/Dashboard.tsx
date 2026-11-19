@@ -274,9 +274,7 @@ export default function Dashboard() {
 
             {shop ? (
               <>
-                {tab === 'overview' ? (
-                  <OverviewTab auth={auth} shop={shop} onTab={setTab} />
-                ) : null}
+                {tab === 'overview' ? <OverviewTab auth={auth} shop={shop} onTab={setTab} /> : null}
                 {tab === 'products' ? <ProductsTab auth={auth} shop={shop} /> : null}
                 {tab === 'orders' ? <OrdersTab auth={auth} shop={shop} /> : null}
                 {tab === 'chats' ? <ChatsTab auth={auth} shop={shop} /> : null}
@@ -740,8 +738,8 @@ function Onboarding({
           </div>
           <div className="rounded-xl border border-zinc-200 bg-zinc-50 px-3 py-2.5 text-xs text-zinc-500">
             <Icon.Truck size={13} className="mr-1 inline" />
-            Tip: most shops start with Standard delivery ($9, 4 days) and Express delivery
-            ($19, 2 days). You can edit these any time.
+            Tip: most shops start with Standard delivery ($9, 4 days) and Express delivery ($19, 2
+            days). You can edit these any time.
           </div>
           <div className="flex justify-between">
             <Button variant="ghost" onClick={() => setStep(2)} icon={<Icon.ArrowLeft size={15} />}>

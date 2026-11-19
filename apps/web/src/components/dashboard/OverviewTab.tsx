@@ -123,8 +123,13 @@ export default function OverviewTab({
 
       <div className="grid gap-3.5 sm:grid-cols-3">
         {stats.map((stat) => (
-          <div key={stat.label} className="flex items-start gap-3 rounded-xl border border-line bg-white p-4">
-            <span className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full ${stat.tone}`}>
+          <div
+            key={stat.label}
+            className="flex items-start gap-3 rounded-xl border border-line bg-white p-4"
+          >
+            <span
+              className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full ${stat.tone}`}
+            >
               {stat.icon}
             </span>
             <span className="flex min-w-0 flex-col">

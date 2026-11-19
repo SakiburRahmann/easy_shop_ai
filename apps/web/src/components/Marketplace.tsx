@@ -130,8 +130,7 @@ export default function Marketplace() {
                 Great products.
                 <br />
                 Brighter businesses.
-                <br />
-                A more open marketplace.
+                <br />A more open marketplace.
               </p>
               <div className="relative mt-5 min-h-[188px] overflow-hidden rounded-xl bg-mint p-5 pr-[80px]">
                 <p className="text-[18px] font-extrabold leading-[1.15] tracking-[-0.03em] text-mint-ink">

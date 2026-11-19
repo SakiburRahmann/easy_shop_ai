@@ -427,7 +427,9 @@ export default function CartPage() {
                   </div>
 
                   <label className="flex flex-col gap-1.5">
-                    <span className="text-[12px] font-semibold text-ink-soft">Delivery address</span>
+                    <span className="text-[12px] font-semibold text-ink-soft">
+                      Delivery address
+                    </span>
                     <textarea
                       value={address}
                       onChange={(event) => setAddress(event.target.value)}

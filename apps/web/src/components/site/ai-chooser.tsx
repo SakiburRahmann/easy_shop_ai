@@ -7,7 +7,11 @@
  */
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { BUSINESS_TYPE_PRESETS, shopDirectoryItemSchema, type ShopDirectoryItem } from '@easyshop/shared';
+import {
+  BUSINESS_TYPE_PRESETS,
+  shopDirectoryItemSchema,
+  type ShopDirectoryItem,
+} from '@easyshop/shared';
 import { api } from '@/lib/api';
 import { Icon } from '@/lib/icons';
 import { Modal, Spinner } from '@/components/ui';

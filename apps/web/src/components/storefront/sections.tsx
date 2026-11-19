@@ -179,7 +179,10 @@ export function ProductCard({
           ) : null}
         </div>
         <div className="mt-3 flex items-start justify-between gap-2">
-          <span className="text-[13px] font-semibold leading-snug" style={{ fontFamily: font, color: ink }}>
+          <span
+            className="text-[13px] font-semibold leading-snug"
+            style={{ fontFamily: font, color: ink }}
+          >
             {product.name}
           </span>
           <span className="shrink-0 text-[13px] font-bold tabular-nums" style={{ color: ink }}>
@@ -224,7 +227,10 @@ export function ProductCard({
         ) : null}
       </div>
       <div className="mt-3 flex items-baseline justify-between gap-3">
-        <span className="text-[13px] font-semibold leading-snug" style={{ color: ink, fontFamily: font }}>
+        <span
+          className="text-[13px] font-semibold leading-snug"
+          style={{ color: ink, fontFamily: font }}
+        >
           {product.name}
         </span>
         <span className="shrink-0 text-[13px] font-bold tabular-nums" style={{ color: ink }}>

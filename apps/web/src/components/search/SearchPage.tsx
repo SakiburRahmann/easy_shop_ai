@@ -98,7 +98,9 @@ export default function SearchPage() {
     const merged: SearchState = {
       q: 'q' in next ? (next.q ?? '') : params.q,
       businessType:
-        'businessType' in next ? ((next.businessType ?? '') as BusinessType | '') : params.businessType,
+        'businessType' in next
+          ? ((next.businessType ?? '') as BusinessType | '')
+          : params.businessType,
       sort: 'sort' in next ? (next.sort ?? 'newest') : params.sort,
       price: 'price' in next ? (next.price ?? '') : params.price,
       page: 'page' in next ? Math.max(1, Number(next.page ?? '1') || 1) : 1,
@@ -159,10 +161,7 @@ export default function SearchPage() {
     };
   }, [q, sort, activeBand?.min, activeBand?.max]);
 
-  const shopById = useMemo(
-    () => new Map((shops ?? []).map((shop) => [shop.id, shop])),
-    [shops],
-  );
+  const shopById = useMemo(() => new Map((shops ?? []).map((shop) => [shop.id, shop])), [shops]);
 
   const typeCounts = useMemo(() => {
     const counts = new Map<BusinessType, number>();
@@ -219,7 +218,9 @@ export default function SearchPage() {
               <option value="">All</option>
               {(Object.keys(BUSINESS_TYPE_PRESETS) as BusinessType[]).map((type) => (
                 <option key={type} value={type}>
-                  {BUSINESS_TYPE_PRESETS[type].label.replace(' & apparel', '').replace(' & care', '')}
+                  {BUSINESS_TYPE_PRESETS[type].label
+                    .replace(' & apparel', '')
+                    .replace(' & care', '')}
                 </option>
               ))}
             </select>
@@ -292,15 +293,10 @@ export default function SearchPage() {
                 <Icon.Search size={14} />
                 Filters
               </span>
-              <Icon.Chevron
-                size={14}
-                className={`transition ${filtersOpen ? 'rotate-180' : ''}`}
-              />
+              <Icon.Chevron size={14} className={`transition ${filtersOpen ? 'rotate-180' : ''}`} />
             </button>
 
-            <div
-              className={`${filtersOpen ? 'mt-3 flex' : 'hidden'} flex-col lg:mt-0 lg:flex`}
-            >
+            <div className={`${filtersOpen ? 'mt-3 flex' : 'hidden'} flex-col lg:mt-0 lg:flex`}>
               <div className="flex items-center justify-between pb-2">
                 <span className="text-[13px] font-bold text-ink">Filters</span>
                 {q || businessType || band ? (
@@ -347,9 +343,7 @@ export default function SearchPage() {
                           (entry.max === undefined || item.product.price <= entry.max),
                       ).length
                     }
-                    onChange={() =>
-                      navigate({ price: band === entry.id ? undefined : entry.id })
-                    }
+                    onChange={() => navigate({ price: band === entry.id ? undefined : entry.id })}
                   />
                 ))}
               </FilterGroup>
@@ -385,7 +379,9 @@ export default function SearchPage() {
           <div className="min-w-0 flex-1">
             {failed ? (
               <div className="rounded-xl bg-wash px-4 py-10 text-center">
-                <p className="text-[13px] font-semibold text-ink">Search is unavailable right now</p>
+                <p className="text-[13px] font-semibold text-ink">
+                  Search is unavailable right now
+                </p>
                 <p className="mt-1 text-[12px] text-muted">
                   The marketplace API did not respond. Check the connection and try again.
                 </p>
@@ -433,23 +429,25 @@ export default function SearchPage() {
                     >
                       <Icon.ArrowLeft size={14} />
                     </button>
-                    {Array.from({ length: pages }).slice(0, 8).map((_, index) => {
-                      const number = index + 1;
-                      return (
-                        <button
-                          key={number}
-                          type="button"
-                          onClick={() => navigate({ page: String(number) })}
-                          className={`h-8 min-w-8 rounded-md px-2 text-[12px] font-semibold transition ${
-                            number === current
-                              ? 'bg-brand-600 text-white'
-                              : 'text-ink-soft hover:bg-wash'
-                          }`}
-                        >
-                          {number}
-                        </button>
-                      );
-                    })}
+                    {Array.from({ length: pages })
+                      .slice(0, 8)
+                      .map((_, index) => {
+                        const number = index + 1;
+                        return (
+                          <button
+                            key={number}
+                            type="button"
+                            onClick={() => navigate({ page: String(number) })}
+                            className={`h-8 min-w-8 rounded-md px-2 text-[12px] font-semibold transition ${
+                              number === current
+                                ? 'bg-brand-600 text-white'
+                                : 'text-ink-soft hover:bg-wash'
+                            }`}
+                          >
+                            {number}
+                          </button>
+                        );
+                      })}
                     <button
                       type="button"
                       disabled={current === pages}
@@ -510,4 +508,3 @@ function FilterCheck({
     </label>
   );
 }
-
