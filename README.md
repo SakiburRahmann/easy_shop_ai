@@ -1,6 +1,8 @@
 # EasyShopAI
 
-[![CI](https://github.com/SakiburRahmann/easy_shop_ai/actions/workflows/ci.yml/badge.svg)](https://github.com/SakiburRahmann/easy_shop_ai/actions/workflows/ci.yml)
+CI (format check, lint, typecheck, tests and build) runs on every push and pull request — see the
+[Actions tab](https://github.com/SakiburRahmann/easy_shop_ai/actions/workflows/ci.yml). GitHub does
+not render workflow badges for private repositories, so the status is linked rather than embedded.
 
 EasyShopAI is a **two-sided commerce platform** (CSE 327 project): a **Shopify-style store builder**
 for sellers and an **Amazon-style marketplace** for buyers, with an AI sales agent inside every
