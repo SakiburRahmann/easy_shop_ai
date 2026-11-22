@@ -39,12 +39,20 @@ const PRICE_BANDS = [
 interface SearchState {
   q: string;
   businessType: BusinessType | '';
+  shopSlug: string;
   sort: string;
   price: string;
   page: number;
 }
 
-const DEFAULTS: SearchState = { q: '', businessType: '', sort: 'newest', price: '', page: 1 };
+const DEFAULTS: SearchState = {
+  q: '',
+  businessType: '',
+  shopSlug: '',
+  sort: 'newest',
+  price: '',
+  page: 1,
+};
 
 /**
  * Filters live in the URL but are read from `location` (the same pattern the
@@ -61,6 +69,7 @@ function readParams(): SearchState {
     businessType: Object.prototype.hasOwnProperty.call(BUSINESS_TYPE_PRESETS, type)
       ? (type as BusinessType)
       : '',
+    shopSlug: (sp.get('shop') ?? '').trim().slice(0, 80),
     sort: SORTS.some(([value]) => value === sort) ? sort : 'newest',
     price: sp.get('price') ?? '',
     page: Math.max(1, Number(sp.get('page') ?? '1') || 1),
@@ -70,7 +79,7 @@ function readParams(): SearchState {
 export default function SearchPage() {
   const [params, setParams] = useState<SearchState>(DEFAULTS);
   const [ready, setReady] = useState(false);
-  const { q, businessType, sort, price: band, page } = params;
+  const { q, businessType, shopSlug, sort, price: band, page } = params;
 
   const [draft, setDraft] = useState(q);
   const [shops, setShops] = useState<ShopDirectoryItem[] | null>(null);
@@ -101,6 +110,7 @@ export default function SearchPage() {
         'businessType' in next
           ? ((next.businessType ?? '') as BusinessType | '')
           : params.businessType,
+      shopSlug: 'shopSlug' in next ? (next.shopSlug ?? '') : params.shopSlug,
       sort: 'sort' in next ? (next.sort ?? 'newest') : params.sort,
       price: 'price' in next ? (next.price ?? '') : params.price,
       page: 'page' in next ? Math.max(1, Number(next.page ?? '1') || 1) : 1,
@@ -108,6 +118,7 @@ export default function SearchPage() {
     const sp = new URLSearchParams();
     if (merged.q) sp.set('q', merged.q);
     if (merged.businessType) sp.set('businessType', merged.businessType);
+    if (merged.shopSlug) sp.set('shop', merged.shopSlug);
     if (merged.sort !== 'newest') sp.set('sort', merged.sort);
     if (merged.price) sp.set('price', merged.price);
     if (merged.page > 1) sp.set('page', String(merged.page));
@@ -143,6 +154,7 @@ export default function SearchPage() {
     });
     const sp = new URLSearchParams({ sort, limit: '48' });
     if (q) sp.set('q', q);
+    if (shopSlug) sp.set('shopSlug', shopSlug);
     if (activeBand?.min !== undefined) sp.set('minPrice', String(activeBand.min));
     if (activeBand?.max !== undefined) sp.set('maxPrice', String(activeBand.max));
     api<unknown[]>(`/search/products?${sp.toString()}`)
@@ -159,24 +171,26 @@ export default function SearchPage() {
     return () => {
       cancelled = true;
     };
-  }, [q, sort, activeBand?.min, activeBand?.max]);
+  }, [q, sort, shopSlug, activeBand?.min, activeBand?.max]);
 
-  const shopById = useMemo(() => new Map((shops ?? []).map((shop) => [shop.id, shop])), [shops]);
-
+  /**
+   * Category counts and filtering come straight from each result's
+   * `shop.businessType` — the API already returns it with every product, so
+   * there is no second fetch to race against.
+   */
   const typeCounts = useMemo(() => {
     const counts = new Map<BusinessType, number>();
     for (const item of products ?? []) {
-      const type = shopById.get(item.shop.id)?.businessType;
-      if (type) counts.set(type, (counts.get(type) ?? 0) + 1);
+      counts.set(item.shop.businessType, (counts.get(item.shop.businessType) ?? 0) + 1);
     }
     return counts;
-  }, [products, shopById]);
+  }, [products]);
 
   const filtered = useMemo(() => {
     const list = products ?? [];
     if (!businessType) return list;
-    return list.filter((item) => shopById.get(item.shop.id)?.businessType === businessType);
-  }, [products, businessType, shopById]);
+    return list.filter((item) => item.shop.businessType === businessType);
+  }, [products, businessType]);
 
   const pages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
   const current = Math.min(page, pages);
@@ -299,7 +313,7 @@ export default function SearchPage() {
             <div className={`${filtersOpen ? 'mt-3 flex' : 'hidden'} flex-col lg:mt-0 lg:flex`}>
               <div className="flex items-center justify-between pb-2">
                 <span className="text-[13px] font-bold text-ink">Filters</span>
-                {q || businessType || band ? (
+                {q || businessType || band || shopSlug ? (
                   <button
                     type="button"
                     onClick={clearAll}
@@ -352,10 +366,15 @@ export default function SearchPage() {
                 {(shops ?? []).map((shop) => (
                   <FilterCheck
                     key={shop.id}
-                    checked={false}
+                    checked={shopSlug === shop.slug}
                     label={shop.name}
                     count={shop.productCount}
-                    onChange={() => navigate({ q: shop.name })}
+                    onChange={() =>
+                      navigate({
+                        shopSlug: shopSlug === shop.slug ? undefined : shop.slug,
+                        businessType: undefined,
+                      })
+                    }
                   />
                 ))}
               </FilterGroup>
