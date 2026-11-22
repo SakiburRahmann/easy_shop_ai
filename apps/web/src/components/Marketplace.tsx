@@ -19,6 +19,7 @@ import { api } from '@/lib/api';
 import { Icon } from '@/lib/icons';
 import { Skeleton } from '@/components/ui';
 import { SiteFooter, SiteHeader } from '@/components/site/header';
+import { MarketplaceGuide } from '@/components/site/concierge';
 import { ProductTile } from '@/components/market/product-tile';
 
 const CATEGORY_MEDIA: Record<BusinessType, { image?: string; tint: string }> = {
@@ -45,6 +46,7 @@ export default function Marketplace() {
   const [shops, setShops] = useState<ShopDirectoryItem[] | null>(null);
   const [products, setProducts] = useState<MarketplaceProduct[] | null>(null);
   const [failed, setFailed] = useState(false);
+  const [guide, setGuide] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -271,14 +273,19 @@ export default function Marketplace() {
                 </p>
               </div>
               <Link
-                href="/search"
+                href="/shops"
                 className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-line bg-white px-3.5 text-[12px] font-semibold text-ink transition hover:border-brand-300"
               >
                 Browse shops
                 <Icon.ArrowRight size={13} />
               </Link>
             </div>
-            <div className="flex items-center justify-between gap-3 rounded-xl bg-[#e9f1fd] px-6 py-5">
+            <button
+              type="button"
+              onClick={() => setGuide(true)}
+              aria-label="Ask the marketplace AI guide"
+              className="flex cursor-pointer items-center justify-between gap-3 rounded-xl bg-[#e9f1fd] px-6 py-5 text-left transition hover:shadow-[0_18px_36px_-16px_rgba(14,20,36,.18)]"
+            >
               <p className="text-[13px] font-semibold leading-snug text-ink">
                 Not sure what to buy?
                 <span className="mt-0.5 block text-[11.5px] font-normal text-ink/60">
@@ -286,12 +293,13 @@ export default function Marketplace() {
                 </span>
               </p>
               <Icon.Spark size={26} className="shrink-0 text-brand-600" />
-            </div>
+            </button>
           </div>
         </section>
       </main>
 
       <SiteFooter />
+      <MarketplaceGuide open={guide} onClose={() => setGuide(false)} />
     </div>
   );
 }
