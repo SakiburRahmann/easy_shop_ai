@@ -16,6 +16,11 @@ permissions:
 jobs:
   quality:
     runs-on: ubuntu-latest
+    env:
+      # Public API endpoint, baked into the web client at build time
+      # (guarded in apps/web/next.config.ts). Kept here so CI builds the
+      # exact artifact production ships.
+      NEXT_PUBLIC_API_URL: https://easyshop-api.easyshop-api.workers.dev
     steps:
       - name: Checkout
         uses: actions/checkout@v4

@@ -5,6 +5,16 @@ import type { NextConfig } from 'next';
  * Cloudflare Worker; all data flows through the public API, so no Node runtime is
  * needed and the output deploys directly to Cloudflare Pages (easyshopai.pages.dev).
  */
+// NEXT_PUBLIC_API_URL is baked into the client bundle at build time
+// (apps/web/src/lib/api.ts). A production build without it would silently
+// ship a site that fetches http://localhost:8787 — broken for every visitor.
+// Fail the build instead; `next dev` keeps the localhost fallback for local work.
+if (process.env.NODE_ENV === 'production' && !process.env.NEXT_PUBLIC_API_URL) {
+  throw new Error(
+    'NEXT_PUBLIC_API_URL is required for a production build of @easyshop/web (e.g. NEXT_PUBLIC_API_URL=https://easyshop-api.easyshop-api.workers.dev pnpm --filter @easyshop/web run build)',
+  );
+}
+
 const nextConfig: NextConfig = {
   output: 'export',
   images: { unoptimized: true },
