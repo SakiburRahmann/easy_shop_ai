@@ -51,21 +51,61 @@ const TYPE_WORDS: Array<[RegExp, BusinessType]> = [
 ];
 
 const STOPWORDS = new Set([
-  'the', 'a', 'an', 'for', 'and', 'with', 'some', 'any', 'me', 'my', 'our',
-  'show', 'find', 'need', 'want', 'get', 'give', 'buy', 'looking',
-  'under', 'over', 'below', 'less', 'than', 'max', 'budget', 'around', 'about',
-  'please', 'would', 'could', 'can', 'you', 'i', 'of', 'to', 'in', 'on',
-  'gifts', 'gift', 'present', 'options', 'products', 'product', 'items',
-  'tech', 'electronics', 'home', 'fashion', 'beauty', 'groceries', 'kids',
+  'the',
+  'a',
+  'an',
+  'for',
+  'and',
+  'with',
+  'some',
+  'any',
+  'me',
+  'my',
+  'our',
+  'show',
+  'find',
+  'need',
+  'want',
+  'get',
+  'give',
+  'buy',
+  'looking',
+  'under',
+  'over',
+  'below',
+  'less',
+  'than',
+  'max',
+  'budget',
+  'around',
+  'about',
+  'please',
+  'would',
+  'could',
+  'can',
+  'you',
+  'i',
+  'of',
+  'to',
+  'in',
+  'on',
+  'gifts',
+  'gift',
+  'present',
+  'options',
+  'products',
+  'product',
+  'items',
+  'tech',
+  'electronics',
+  'home',
+  'fashion',
+  'beauty',
+  'groceries',
+  'kids',
 ]);
 
-export function MarketplaceGuide({
-  open,
-  onClose,
-}: {
-  open: boolean;
-  onClose: () => void;
-}) {
+export function MarketplaceGuide({ open, onClose }: { open: boolean; onClose: () => void }) {
   const router = useRouter();
   const [msgs, setMsgs] = useState<GuideMsg[]>([]);
   const [draft, setDraft] = useState('');
@@ -81,7 +121,7 @@ export function MarketplaceGuide({
         setMsgs([
           {
             role: 'assistant',
-            text: 'Hi! I\'m the EasyShopAI guide. I can search every shop\'s public catalog and point you to the right store — then that shop\'s AI takes over for stock, prices and ordering. Try “gifts under $50”.',
+            text: "Hi! I'm the EasyShopAI guide. I can search every shop's public catalog and point you to the right store — then that shop's AI takes over for stock, prices and ordering. Try “gifts under $50”.",
           },
         ]);
       }
@@ -123,18 +163,26 @@ export function MarketplaceGuide({
     setBusy(true);
     try {
       const lower = text.toLowerCase();
-      const maxPrice = Number((lower.match(/(?:under|below|less than|max|budget of?)\s*\$?(\d+)/) ?? [])[1] ?? NaN);
+      const maxPrice = Number(
+        (lower.match(/(?:under|below|less than|max|budget of?)\s*\$?(\d+)/) ?? [])[1] ?? NaN,
+      );
       const type = TYPE_WORDS.find(([pattern]) => pattern.test(lower))?.[1];
 
       const shopHit = (shops ?? []).find((shop) =>
-        shop.name.toLowerCase().split(/\s+/).some((word) => word.length > 2 && lower.includes(word)),
+        shop.name
+          .toLowerCase()
+          .split(/\s+/)
+          .some((word) => word.length > 2 && lower.includes(word)),
       );
 
       await new Promise((resolve) => setTimeout(resolve, 450));
 
       if (/\b(shops?|stores?|sellers?|marketplace|which shop)\b/.test(lower) && !shopHit) {
         if (!shops?.length) {
-          push({ role: 'assistant', text: 'I couldn\'t load the shop directory right now — please try again in a moment.' });
+          push({
+            role: 'assistant',
+            text: "I couldn't load the shop directory right now — please try again in a moment.",
+          });
           return;
         }
         push({
@@ -179,7 +227,9 @@ export function MarketplaceGuide({
         return;
       }
 
-      const sellers = [...new Map(products.map((item) => [item.shop.slug, item.shop])).values()].slice(0, 3);
+      const sellers = [
+        ...new Map(products.map((item) => [item.shop.slug, item.shop])).values(),
+      ].slice(0, 3);
       const scope = [
         Number.isFinite(maxPrice) ? `under $${maxPrice}` : '',
         type ? `in ${BUSINESS_TYPE_PRESETS[type].label.toLowerCase()}` : '',
@@ -193,7 +243,10 @@ export function MarketplaceGuide({
         shops: sellers,
       });
     } catch {
-      push({ role: 'assistant', text: 'I couldn\'t reach the marketplace API just now. Check the connection and try again.' });
+      push({
+        role: 'assistant',
+        text: "I couldn't reach the marketplace API just now. Check the connection and try again.",
+      });
     } finally {
       setBusy(false);
     }
@@ -229,7 +282,10 @@ export function MarketplaceGuide({
         className="flex-1 space-y-3 overflow-y-auto overscroll-contain bg-wash px-3 py-4"
       >
         {msgs.map((message, index) => (
-          <div key={index} className={message.role === 'user' ? 'flex justify-end' : 'flex justify-start'}>
+          <div
+            key={index}
+            className={message.role === 'user' ? 'flex justify-end' : 'flex justify-start'}
+          >
             {message.role === 'user' ? (
               <div className="max-w-[85%] rounded-2xl rounded-br-md bg-brand-600 px-3.5 py-2.5 text-[13px] leading-relaxed text-white">
                 {message.text}
@@ -324,13 +380,7 @@ export function MarketplaceGuide({
   );
 }
 
-function GuideProductCard({
-  item,
-  onOpen,
-}: {
-  item: MarketplaceProduct;
-  onOpen: () => void;
-}) {
+function GuideProductCard({ item, onOpen }: { item: MarketplaceProduct; onOpen: () => void }) {
   return (
     <button
       type="button"

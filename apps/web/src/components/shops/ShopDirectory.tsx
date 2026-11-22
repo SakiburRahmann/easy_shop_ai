@@ -148,8 +148,7 @@ export default function ShopDirectory() {
             </div>
           ) : failed ? (
             <p className="rounded-xl bg-wash px-4 py-6 text-center text-[13px] text-muted">
-              We couldn&apos;t reach the marketplace API. Check that it&apos;s running, then
-              reload.
+              We couldn&apos;t reach the marketplace API. Check that it&apos;s running, then reload.
             </p>
           ) : visible.length === 0 ? (
             <EmptyState
