@@ -1,10 +1,11 @@
 'use client';
 
 /**
- * Customer storefront, matched to the reference: photographic banner, shop
- * identity row with tabs, a three-panel featured collection, the full product
- * grid and the shop's AI agent. Product data always comes from API responses —
- * never from model text.
+ * Customer storefront. The seller's applied theme (or the `templateId` house
+ * preset) drives the whole composition: header architecture, hero style,
+ * catalogue density and type pairing come from `visualsFromStorefront`, and
+ * the section registry renders the preset's ordered blocks. Product data
+ * always comes from API responses — never from model text.
  */
 import { useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
@@ -17,11 +18,30 @@ import {
 } from '@easyshop/shared';
 import { ApiError, api, streamChat, money, visitorId } from '@/lib/api';
 import { useShopCartUnits } from '@/lib/cart';
-import { SiteFooter, SiteHeader } from '@/components/site/header';
-import { ProductTile } from '@/components/market/product-tile';
-import { photo, poolFor, rotate, seedHash } from '@/components/storefront/image-library';
+import { SiteFooter } from '@/components/site/header';
 import { Icon } from '@/lib/icons';
 import { Button, CardSkeletonGrid, Skeleton } from '@/components/ui';
+import { TEMPLATE_VISUALS, storefrontFont } from '@/components/storefront/templates';
+import {
+  storefrontOf,
+  visualsFromStorefront,
+  type ThemeVisuals,
+} from '@/components/storefront/theme';
+import { StorefrontHeader } from '@/components/storefront/header';
+import { StorefrontCatalog } from '@/components/storefront/catalog';
+import { decorFor } from '@/components/storefront/decor';
+import {
+  AnnouncementBar,
+  CategoryCollage,
+  CategoryIndex,
+  CollageHero,
+  EditorialHero,
+  FeaturedRail,
+  IntroStrip,
+  PoliciesSection,
+  StoryBand,
+  TrustRow,
+} from '@/components/storefront/sections';
 
 function readSlug(): string {
   if (typeof window === 'undefined') return '';
@@ -37,7 +57,7 @@ export default function Storefront() {
   const [loading, setLoading] = useState(true);
   const [notFound, setNotFound] = useState(false);
   const [loadError, setLoadError] = useState(false);
-  const [sortBy, setSortBy] = useState('featured');
+  const [categoryId, setCategoryId] = useState<string | undefined>(undefined);
   const [chatOpen, setChatOpen] = useState(
     () =>
       typeof window !== 'undefined' &&
@@ -85,14 +105,23 @@ export default function Storefront() {
   }, [router, slug]);
 
   const openProduct = (productId: string) => router.push(`/product?id=${productId}&shop=${slug}`);
+  const goCatalog = () =>
+    document.getElementById('catalog')?.scrollIntoView({ behavior: 'smooth' });
 
-  const visibleProducts = useMemo(() => {
-    const list = [...(data?.products ?? [])];
-    if (sortBy === 'price_asc') list.sort((a, b) => a.price - b.price);
-    if (sortBy === 'price_desc') list.sort((a, b) => b.price - a.price);
-    if (sortBy === 'name') list.sort((a, b) => a.name.localeCompare(b.name));
-    return list;
-  }, [data, sortBy]);
+  /** The seller's applied theme, or the templateId house preset as fallback. */
+  const visuals: ThemeVisuals | null = useMemo(() => {
+    if (!data) return null;
+    const applied = storefrontOf(data);
+    if (applied) return visualsFromStorefront(applied);
+    return {
+      ...TEMPLATE_VISUALS[data.shop.templateId],
+      radius: 'soft' as const,
+      density: 'balanced' as const,
+      copy: { ctaLabel: 'Browse the catalog', headline: '' },
+    };
+  }, [data]);
+
+  const decor = useMemo(() => (data ? decorFor(data.shop) : null), [data]);
 
   if (loading) {
     return (
@@ -105,7 +134,7 @@ export default function Storefront() {
     );
   }
 
-  if (notFound || loadError || !data) {
+  if (notFound || loadError || !data || !visuals || !decor) {
     return (
       <div className="flex flex-1 flex-col items-center justify-center gap-3 p-10 text-center">
         <div className="flex h-12 w-12 items-center justify-center rounded-full bg-brand-50 text-brand-600">
@@ -134,268 +163,165 @@ export default function Storefront() {
     );
   }
 
-  const primary = data.shop.theme.primaryColor ?? '#2f5bf0';
-  const accent = data.shop.theme.accentColor ?? '#f59e0b';
-  const tagline = {
-    fashion: ['Style that feels like you.', 'Everyday', 'Style', 'Simple.', 'Comfort.', 'You.'],
-    electronics: ['Sound that moves with you.', 'Everyday', 'Sound', 'Clear.', 'Crisp.', 'Sound.'],
-    home: ['Home feels better here.', 'Everyday', 'Comforts', 'Simple.', 'Natural.', 'Home.'],
-    beauty: ['Care for your everyday glow.', 'Everyday', 'Care', 'Glow.', 'Soft.', 'Daily.'],
-    groceries: ['Fresh picks, delivered.', 'Everyday', 'Fresh', 'Fresh.', 'Local.', 'Daily.'],
-    kids: ['Made for little adventures.', 'Everyday', 'Play', 'Play.', 'Learn.', 'Grow.'],
-    other: ['Thoughtful things, chosen well.', 'Everyday', 'Finds', 'Made.', 'With.', 'Care.'],
-  }[data.shop.businessType] ?? [
-    'Home feels better here.',
-    'Everyday',
-    'Comforts',
-    'Simple.',
-    'Natural.',
-    'Home.',
-  ];
-  const pool = poolFor(data.shop.businessType);
-  const heroPhoto = photo(rotate(pool.hero, seedHash(slug))[0] ?? pool.hero[0], 1600, 520);
-  const lookA = photo(pool.looks[0] ?? pool.hero[0], 900, 620);
-  const lookB = photo(pool.looks[1] ?? pool.looks[0] ?? pool.hero[0], 700, 460);
-  const zones = data.shop.deliveryRules.zones;
-  const shopInitial = data.shop.name.slice(0, 1).toUpperCase();
+  const shop = data.shop;
+  const primary = shop.storefront?.tokens.primary ?? shop.theme.primaryColor ?? '#2f5bf0';
+  const accent = shop.storefront?.tokens.accent ?? shop.theme.accentColor ?? '#f59e0b';
+  const font = storefrontFont(shop.theme.font, visuals.display);
+  const ink = visuals.ink;
+  const muted = visuals.muted;
+  const copy = visuals.copy;
+  const products = data.products;
+
+  const openCart = () => router.push(`/cart?shop=${slug}`);
+
+  const sectionFor = (section: string) => {
+    switch (section) {
+      case 'announcement':
+        return (
+          <AnnouncementBar
+            key="announcement"
+            shop={shop}
+            primary={primary}
+            announcement={copy.announcement}
+          />
+        );
+      case 'intro':
+        return (
+          <IntroStrip
+            key="intro"
+            shop={shop}
+            products={products}
+            decor={decor}
+            primary={primary}
+            ink={ink}
+            muted={muted}
+            font={font}
+            headline={copy.headline || undefined}
+            subhead={copy.subhead}
+            ctaLabel={copy.ctaLabel}
+          />
+        );
+      case 'hero':
+        if (visuals.hero === 'collage') {
+          return (
+            <CollageHero
+              key="hero"
+              shop={shop}
+              products={products}
+              decor={decor}
+              primary={primary}
+              font={font}
+              headline={copy.headline || undefined}
+              subhead={copy.subhead}
+              ctaLabel={copy.ctaLabel}
+            />
+          );
+        }
+        return (
+          <EditorialHero
+            key="hero"
+            shop={shop}
+            products={products}
+            decor={decor}
+            primary={primary}
+            ink={ink}
+            muted={muted}
+            font={font}
+            headline={copy.headline || undefined}
+            subhead={copy.subhead}
+          />
+        );
+      case 'categoryCollage':
+        return (
+          <CategoryCollage
+            key="categoryCollage"
+            categories={data.categories}
+            products={products}
+            decor={decor}
+            ink={ink}
+            muted={muted}
+            font={font}
+            onPick={setCategoryId}
+          />
+        );
+      case 'categoryIndex':
+        return (
+          <CategoryIndex
+            key="categoryIndex"
+            categories={data.categories}
+            products={products}
+            ink={ink}
+            muted={muted}
+            font={font}
+            onPick={setCategoryId}
+          />
+        );
+      case 'rail':
+        return (
+          <FeaturedRail
+            key="rail"
+            products={products}
+            primary={primary}
+            ink={ink}
+            muted={muted}
+            font={font}
+            onOpen={openProduct}
+            onViewAll={goCatalog}
+          />
+        );
+      case 'story':
+        return (
+          <StoryBand
+            key="story"
+            shop={shop}
+            decor={decor}
+            primary={primary}
+            font={font}
+            story={copy.story}
+          />
+        );
+      case 'trust':
+        return <TrustRow key="trust" shop={shop} primary={primary} ink={ink} muted={muted} />;
+      case 'policies':
+        return <PoliciesSection key="policies" shop={shop} ink={ink} muted={muted} font={font} />;
+      default:
+        return null;
+    }
+  };
 
   return (
-    <div className="flex min-h-full flex-1 flex-col bg-white">
-      <SiteHeader />
+    <div
+      className="flex min-h-full flex-1 flex-col"
+      style={{ backgroundColor: visuals.surface }}
+      data-es-radius={visuals.radius}
+      data-es-density={visuals.density}
+    >
+      <StorefrontHeader
+        data={data}
+        preset={visuals}
+        primary={primary}
+        font={font}
+        ink={ink}
+        muted={muted}
+        cartUnits={cartUnits}
+        onCart={openCart}
+        onPick={setCategoryId}
+      />
 
-      <main className="mx-auto w-full max-w-[1120px] flex-1 px-5 pb-12">
-        {/* ───────────────────────────── banner ───────────────────────────── */}
-        <div className="relative mt-4 h-[190px] overflow-hidden rounded-xl">
-          <img src={heroPhoto} alt="" className="h-full w-full object-cover" />
-          <div className="absolute inset-0 bg-gradient-to-r from-[#eef1ec]/90 via-[#eef1ec]/35 to-transparent" />
-          <div className="absolute inset-0 flex flex-col justify-center px-7 sm:px-9">
-            <h1 className="max-w-[16ch] text-[30px] font-extrabold leading-[1.05] tracking-[-0.04em] text-[#173a2e] sm:text-[34px]">
-              {data.shop.name}
-            </h1>
-            <p className="mt-2 max-w-[34ch] text-[12px] leading-relaxed text-[#3f5b4f]">
-              {data.shop.description ||
-                'Thoughtful essentials for a more comfortable home, delivered with care.'}
-            </p>
-          </div>
-          <p className="absolute right-7 top-1/2 hidden max-w-[12ch] -translate-y-1/2 text-right text-[21px] font-semibold leading-[1.2] tracking-[-0.02em] text-[#173a2e] md:block">
-            {tagline[0]}
-          </p>
-        </div>
+      {visuals.sections.map((section) => sectionFor(section))}
 
-        {/* ─────────────────────────── identity row ───────────────────────── */}
-        <div className="flex flex-wrap items-center gap-4 border-b border-line py-4">
-          <div className="flex h-[58px] w-[58px] shrink-0 items-center justify-center overflow-hidden rounded-full border border-[#dbe4dc] bg-[#e6ece7] text-[20px] font-bold text-[#173a2e]">
-            {data.shop.logoUrl ? (
-              <img src={data.shop.logoUrl} alt="" className="h-full w-full object-cover" />
-            ) : (
-              shopInitial
-            )}
-          </div>
-          <div className="min-w-0">
-            <p className="truncate text-[22px] font-extrabold leading-tight tracking-[-0.035em] text-ink">
-              {data.shop.name}
-            </p>
-            <p className="mt-0.5 flex flex-wrap items-center gap-x-2 text-[11.5px] text-muted">
-              <span>
-                {data.products.length} product{data.products.length === 1 ? '' : 's'}
-              </span>
-              <span>·</span>
-              <span>Cash on delivery</span>
-              <span>·</span>
-              <span>{data.categories.length} collections</span>
-            </p>
-          </div>
-
-          <nav className="order-last flex w-full items-center gap-7 border-t border-line pt-3 text-[12.5px] font-semibold text-ink/70 sm:order-none sm:mx-auto sm:w-auto sm:border-0 sm:pt-0">
-            <button
-              type="button"
-              onClick={() =>
-                document.getElementById('catalog')?.scrollIntoView({ behavior: 'smooth' })
-              }
-              className="-mb-px border-b-2 border-brand-600 pb-2 text-brand-600 sm:pb-1"
-            >
-              Products
-            </button>
-            <Link href="#about-shop" className="pb-2 text-ink/60 transition hover:text-ink sm:pb-1">
-              About
-            </Link>
-            {data.ai.enabled ? (
-              <button
-                type="button"
-                onClick={() => setChatOpen(true)}
-                className="pb-2 text-ink/60 transition hover:text-ink sm:pb-1"
-              >
-                Ask AI
-              </button>
-            ) : null}
-          </nav>
-
-          <Link
-            href={`/cart?shop=${slug}`}
-            className="ml-auto hidden h-10 shrink-0 items-center gap-2 rounded-lg bg-brand-600 px-4 text-[12.5px] font-semibold text-white transition hover:bg-brand-700 sm:flex"
-          >
-            <Icon.Bag size={14} />
-            View cart{cartUnits > 0 ? ` (${cartUnits})` : ''}
-          </Link>
-        </div>
-
-        {/* ─────────────────────── featured collection ────────────────────── */}
-        <div className="mt-6 flex items-center justify-between">
-          <h2 className="text-[15px] font-extrabold tracking-[-0.02em] text-ink">
-            Featured collection
-          </h2>
-          <button
-            type="button"
-            onClick={() =>
-              document.getElementById('catalog')?.scrollIntoView({ behavior: 'smooth' })
-            }
-            className="flex items-center gap-1.5 text-[11.5px] font-semibold text-brand-600 hover:text-brand-700"
-          >
-            View collection
-            <Icon.ArrowRight size={12} />
-          </button>
-        </div>
-
-        <div className="mt-3 grid gap-3 md:grid-cols-[300px_minmax(0,1fr)_276px]">
-          <div className="flex flex-col justify-between rounded-lg bg-[#e3ece7] p-5">
-            <div>
-              <p className="text-[19px] font-extrabold leading-[1.15] tracking-[-0.03em] text-[#173a2e]">
-                {tagline[1]}
-                <br />
-                {tagline[2]}
-              </p>
-              <p className="mt-1.5 max-w-[22ch] text-[11px] leading-relaxed text-[#3f5b4f]">
-                Timeless pieces for the spaces you love.
-              </p>
-            </div>
-            <button
-              type="button"
-              onClick={() =>
-                document.getElementById('catalog')?.scrollIntoView({ behavior: 'smooth' })
-              }
-              className="mt-4 inline-flex h-9 w-fit items-center gap-1.5 rounded-lg bg-brand-600 px-3.5 text-[11px] font-semibold text-white transition hover:bg-brand-700"
-            >
-              Shop the collection
-              <Icon.ArrowRight size={12} />
-            </button>
-          </div>
-          <img
-            src={lookA}
-            alt=""
-            aria-hidden="true"
-            className="h-[190px] w-full rounded-lg object-cover md:h-[210px]"
-          />
-          <div className="relative overflow-hidden rounded-lg">
-            <img
-              src={lookB}
-              alt=""
-              aria-hidden="true"
-              className="h-[190px] w-full object-cover md:h-[210px]"
-            />
-            <div className="absolute inset-0 bg-gradient-to-r from-black/25 to-transparent" />
-            <p className="absolute left-5 top-5 text-[19px] font-semibold leading-[1.2] tracking-[-0.02em] text-white">
-              {tagline[3]}
-              <br />
-              {tagline[4]}
-              <br />
-              {tagline[5]}
-            </p>
-          </div>
-        </div>
-
-        {/* ─────────────────────────── all products ───────────────────────── */}
-        <div id="catalog" className="mt-7 flex scroll-mt-24 items-end justify-between gap-3">
-          <h2 className="text-[16px] font-extrabold tracking-[-0.025em] text-ink">All products</h2>
-          <label className="flex h-9 items-center gap-2 rounded-lg border border-line px-3">
-            <span className="text-[11px] text-muted">Sort by</span>
-            <select
-              value={sortBy}
-              onChange={(event) => setSortBy(event.target.value)}
-              aria-label="Sort products"
-              className="w-[100px] cursor-pointer appearance-none bg-transparent text-[11.5px] font-semibold text-ink outline-none"
-            >
-              <option value="featured">Featured</option>
-              <option value="price_asc">Price: low to high</option>
-              <option value="price_desc">Price: high to low</option>
-              <option value="name">Name</option>
-            </select>
-            <Icon.Chevron size={12} className="text-muted" />
-          </label>
-        </div>
-
-        {visibleProducts.length === 0 ? (
-          <p className="mt-5 rounded-lg bg-wash px-4 py-10 text-center text-[12.5px] text-muted">
-            This shop has not listed any products yet.
-          </p>
-        ) : (
-          <div className="mt-4 grid grid-cols-2 gap-x-4 gap-y-7 sm:grid-cols-3 lg:grid-cols-6">
-            {visibleProducts.map((item) => (
-              <ProductTile
-                key={item.id}
-                product={item}
-                href={`/product?id=${item.id}&shop=${slug}`}
-              />
-            ))}
-          </div>
-        )}
-
-        {/* ───────────────────────────── about ────────────────────────────── */}
-        <section
-          id="about-shop"
-          className="mt-10 grid scroll-mt-24 gap-6 border-t border-line pt-7 md:grid-cols-[1.3fr_0.7fr]"
-        >
-          <div>
-            <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-muted">
-              About this shop
-            </p>
-            <h2 className="mt-2 text-[20px] font-extrabold tracking-[-0.03em] text-ink">
-              {data.shop.name}
-            </h2>
-            <p className="mt-2 max-w-[62ch] text-[12.5px] leading-[1.7] text-ink-soft/85">
-              {data.shop.description ||
-                data.shop.policies.notes ||
-                'A small shop on EasyShopAI. Ask the AI assistant anything about the catalog.'}
-            </p>
-            <div className="mt-3 flex flex-wrap gap-x-5 gap-y-2 text-[11.5px] text-muted">
-              {data.shop.contact.phone ? (
-                <span className="flex items-center gap-1.5">
-                  <Icon.Phone size={12} /> {data.shop.contact.phone}
-                </span>
-              ) : null}
-              {data.shop.contact.email ? (
-                <span className="flex items-center gap-1.5">
-                  <Icon.Globe size={12} /> {data.shop.contact.email}
-                </span>
-              ) : null}
-            </div>
-          </div>
-          <div className="rounded-lg bg-wash p-4">
-            <p className="text-[11px] font-bold uppercase tracking-[0.12em] text-ink/60">
-              Delivery
-            </p>
-            {zones.length ? (
-              <ul className="mt-2 flex flex-col gap-1.5">
-                {zones.map((zone) => (
-                  <li
-                    key={zone.name}
-                    className="flex items-center justify-between text-[12px] text-ink"
-                  >
-                    <span>{zone.name}</span>
-                    <span className="text-muted">
-                      {money(zone.charge)} · {zone.etaDays}d
-                    </span>
-                  </li>
-                ))}
-              </ul>
-            ) : (
-              <p className="mt-2 text-[12px] text-muted">Confirmed by the shop on the phone.</p>
-            )}
-            <p className="mt-3 border-t border-line pt-3 text-[11.5px] leading-relaxed text-muted">
-              {data.shop.policies.returnPolicy || 'Ask the shop about returns before ordering.'}
-            </p>
-          </div>
-        </section>
-      </main>
+      <StorefrontCatalog
+        data={data}
+        slug={slug}
+        preset={visuals}
+        primary={primary}
+        font={font}
+        ink={ink}
+        muted={muted}
+        categoryId={categoryId}
+        onCategory={setCategoryId}
+        onBuy={openProduct}
+      />
 
       <SiteFooter />
 
@@ -525,7 +451,7 @@ function ChatWidget({
       setMsgs((current) => {
         const last = current[current.length - 1];
         if (last?.role === 'assistant' && !last.text && !last.cards && last.streaming) {
-          return [...current.slice(0, -1), { role: 'assistant', text: '…', streaming: false }];
+          return [...current.slice(0, -1), { ...last, text: '…', streaming: false }];
         }
         return current;
       });
